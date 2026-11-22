@@ -1,5 +1,6 @@
 from typing import Any
 
+import certifi
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.errors import PyMongoError
 
@@ -15,4 +16,4 @@ async def ping_database(database: AsyncIOMotorDatabase[dict[str, Any]]) -> bool:
 def create_mongo_client(uri: str) -> AsyncIOMotorClient[dict[str, Any]]:
     if not uri:
         raise RuntimeError("MONGODB_URI is required")
-    return AsyncIOMotorClient(uri)
+    return AsyncIOMotorClient(uri, tlsCAFile=certifi.where())

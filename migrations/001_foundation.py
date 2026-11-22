@@ -6,6 +6,7 @@ Run with:
 
 import asyncio
 
+import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from libs.common.config import Settings
@@ -16,7 +17,7 @@ async def migrate() -> None:
     if not settings.mongodb_uri:
         raise RuntimeError("MONGODB_URI is required")
 
-    client = AsyncIOMotorClient(settings.mongodb_uri)
+    client = AsyncIOMotorClient(settings.mongodb_uri, tlsCAFile=certifi.where())
     database = client[settings.mongodb_db]
 
     for collection_name in ("jobs", "defects", "import_batches", "rca_analyses", "knowledge_entries", "trend_facts"):

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from libs.common.config import Settings
-from libs.common.database import ping_database
+from libs.common.database import create_mongo_client, ping_database
 from libs.common.logging import configure_logging
 
 settings = Settings()
@@ -18,7 +18,7 @@ mongo_client: AsyncIOMotorClient[dict[str, Any]] | None = None
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global mongo_client
     if settings.mongodb_uri:
-        mongo_client = AsyncIOMotorClient(settings.mongodb_uri)
+        mongo_client = create_mongo_client(settings.mongodb_uri)
     yield
     if mongo_client:
         mongo_client.close()
