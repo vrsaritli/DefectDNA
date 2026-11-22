@@ -28,7 +28,8 @@ from services.api_gateway.app.taxonomy import (
 router = APIRouter(prefix="/api/v1")
 
 _READERS = {"VIEWER", "QA_LEAD", "ADMIN"}
-_REVIEWERS = {"QA_LEAD"}  # §8: approval stays with the QA Lead role
+# §8: approve / correct / reject / re-open — QA Lead, and Admin (end-to-end access).
+_REVIEWERS = {"QA_LEAD", "ADMIN"}
 _CODE_FIELDS: dict[str, TaxonomyKind] = {
     "root_cause_code": "root_causes",
     "sdlc_phase_code": "sdlc_phases",
@@ -53,7 +54,7 @@ class FinalCodes(BaseModel):
 
 
 class ReviewBody(BaseModel):
-    decision: Literal["APPROVE", "CORRECT"] = Field(
+    decision: Literal["APPROVE", "CORRECT", "REJECT"] = Field(
         validation_alias=AliasChoices("decision", "action")
     )
     final: FinalCodes | None = Field(
@@ -148,9 +149,12 @@ async def review_rca(
             "defect": await _defect_text(project_id, rca.get("defect_id")),
         },
     )
+    audit_action = {"APPROVED": "RCA_APPROVED", "REJECTED": "RCA_REJECTED"}.get(
+        str(result.get("status")), "RCA_CORRECTED"
+    )
     await write_audit(
         database,
-        action="RCA_APPROVED" if result.get("status") == "APPROVED" else "RCA_CORRECTED",
+        action=audit_action,
         actor_user_id=current["user"]["_id"],
         project_id=project_id,
         entity="rca_analyses",

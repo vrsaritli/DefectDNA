@@ -155,4 +155,7 @@ async def pull_from_ado(
             "include_comments": body.include_comments,
         },
     )
+    result["already_confirmed_ids"] = await core._confirmed_among(
+        project_id, [int(item) for item in result.get("ado_ids", [])]
+    )
     return result

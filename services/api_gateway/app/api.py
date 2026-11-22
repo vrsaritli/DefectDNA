@@ -264,6 +264,23 @@ async def _call_trends(
     )
 
 
+async def _confirmed_among(project_id: str, ado_ids: list[int]) -> list[int]:
+    """IDs that already have a confirmed (approved/corrected/ingested) RCA.
+
+    Advisory only: the import itself never fails because this check is unavailable.
+    """
+    if not ado_ids:
+        return []
+    try:
+        _, state = await _call_ai_knowledge(
+            "GET", f"/internal/projects/{project_id}/analysis-state"
+        )
+    except HTTPException:
+        return []
+    reviewed = {int(item) for item in state.get("reviewed", [])}
+    return sorted(item for item in set(ado_ids) if item in reviewed)
+
+
 async def _call_ai_knowledge(
     method: str,
     path: str,
@@ -668,6 +685,7 @@ async def upload_defects(
             "row_errors": len(preview.get("row_errors", [])),
         },
     )
+    result["already_confirmed_ids"] = await _confirmed_among(project_id, result.get("ado_ids", []))
     return result
 
 
@@ -758,7 +776,62 @@ async def list_project_defects(
             **({"state": state} if state else {}),
         },
     )
+    defects = result.get("defects")
+    if isinstance(defects, list) and defects:
+        summaries = await _rca_summaries(
+            database, project_id, [int(item["ado_id"]) for item in defects if item.get("ado_id")]
+        )
+        for item in defects:
+            item["rca"] = summaries.get(int(item.get("ado_id") or 0))
     return result
+
+
+async def _rca_summaries(
+    database: Any, project_id: str, ado_ids: list[int]
+) -> dict[int, dict[str, Any]]:
+    """Latest RCA per defect for the register: status, RCA fields and AI confidence.
+
+    The register still loads (without RCA columns) if the AI service is unavailable.
+    """
+    from services.api_gateway.app.taxonomy import enrich_rca
+
+    if not ado_ids:
+        return {}
+    try:
+        _, found = await _call_ai_knowledge(
+            "GET",
+            f"/internal/projects/{project_id}/rcas",
+            params={"page": 1, "page_size": 100, "defect_ids": ",".join(map(str, ado_ids))},
+        )
+    except HTTPException:
+        return {}
+    latest: dict[int, dict[str, Any]] = {}
+    for rca in found.get("rcas", []):
+        defect_id = rca.get("defect_id")
+        current = latest.get(defect_id) if isinstance(defect_id, int) else None
+        if isinstance(defect_id, int) and (
+            current is None or (rca.get("version") or 0) > (current.get("version") or 0)
+        ):
+            latest[defect_id] = rca
+    cache: dict[int, Any] = {}
+    summaries: dict[int, dict[str, Any]] = {}
+    for defect_id, rca in latest.items():
+        view = await enrich_rca(database, project_id, rca, cache)
+        proposed = view.get("proposed") or {}
+        final = view.get("final") or {}
+        confirmed = view.get("status") in {"APPROVED", "CORRECTED"}
+        chosen = final if confirmed else proposed
+        summaries[defect_id] = {
+            "id": view.get("id"),
+            "status": view.get("status"),
+            "review_source": view.get("review_source"),
+            "root_cause": chosen.get("root_cause"),
+            "sdlc_phase": chosen.get("sdlc_phase"),
+            "testing_gap": chosen.get("testing_gap"),
+            "confidence": proposed.get("confidence"),
+            "reviewed_at": view.get("reviewed_at"),
+        }
+    return summaries
 
 
 @router.get("/projects/{project_id}/defects/{ado_id}")

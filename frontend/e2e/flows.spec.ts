@@ -34,3 +34,38 @@ test("a QA Lead reviews an AI proposal with its cited case and approves it", asy
   await expect(page.getByText("#419 approved.")).toBeVisible();
   expect(state.reviews).toEqual([{ decision: "APPROVE", reopen: false }]);
 });
+
+test("an Admin analyzes one import, sees already-confirmed IDs, and can reject a proposal", async ({ page }) => {
+  const state: MockState = { mustChangePassword: false, reviews: [], role: "ADMIN" };
+  await mockApi(page, state);
+  await signIn(page);
+
+  await page.getByRole("button", { name: "AI analysis" }).click();
+  await expect(page.getByLabel("Imported defects")).toHaveValue("batch-1");
+  await page.getByRole("button", { name: "Analyze defects", exact: true }).click();
+  await expect(page.getByText("2 defects already have a confirmed RCA.")).toBeVisible();
+  await expect(page.locator(".id-chip")).toHaveText(["#303", "#450"]);
+  expect(state.analyses).toEqual([{ import_batch_id: "batch-1", reanalyze: false }]);
+
+  await page.getByRole("cell", { name: "Saved card cannot be deleted" }).click();
+  await expect(page.getByRole("link", { name: "Open in Azure DevOps" })).toHaveAttribute(
+    "href",
+    "https://dev.azure.com/acme/Shop/_workitems/edit/419",
+  );
+  await page.getByRole("button", { name: "Reject" }).click();
+  await page.getByRole("button", { name: "Confirm reject" }).click();
+  expect(state.reviews).toEqual([{ decision: "REJECT", reopen: false, note: null }]);
+});
+
+test("the defect register shows each defect's RCA, confidence and status", async ({ page }) => {
+  const state: MockState = { mustChangePassword: false, reviews: [], role: "VIEWER" };
+  await mockApi(page, state);
+  await signIn(page);
+
+  await page.getByRole("button", { name: "Defects" }).click();
+  const row = page.getByRole("row", { name: /Saved card cannot be deleted/ });
+  await expect(row).toContainText("Code");
+  await expect(row).toContainText("No test case");
+  await expect(row).toContainText("82%");
+  await expect(row).toContainText("AI proposed");
+});

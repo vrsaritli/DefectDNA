@@ -101,22 +101,41 @@ async def _create_batch(
     defects: list[dict[str, Any]],
     errors: list[dict[str, Any]],
     user_id: ObjectId,
+    label: str | None = None,
+    purpose: str = "IMPORT",
 ) -> ObjectId:
+    """Record an import. ``ado_ids`` lets analysis target exactly this import's defects;
+    ``purpose`` separates defect imports from knowledge ingestion."""
     now = datetime.now(UTC)
     result = await database["import_batches"].insert_one(
         {
             "project_id": project_id,
             "source": source,
+            "purpose": purpose,
+            "label": (label or filename or source)[:200],
             "filename": filename,
             "row_count": row_count,
             "accepted": len(defects),
             "rejected": row_count - len(defects),
+            "ado_ids": [int(defect["ado_id"]) for defect in defects],
             "errors": errors,
             "by": user_id,
             "created_at": now,
         }
     )
     return cast(ObjectId, result.inserted_id)
+
+
+def _pull_label(mode: str, query_link: str | None, ids: str | None, start: Any, end: Any) -> str:
+    if mode == "query":
+        try:
+            return f"ADO saved query {query_id_from_link(query_link or '')[:8]}"
+        except AdoInputError:
+            return "ADO saved query"
+    if mode == "ids":
+        shown = ", ".join((ids or "").replace(",", " ").split()[:4])
+        return f"ADO work items {shown}" + ("…" if len((ids or "").replace(",", " ").split()) > 4 else "")
+    return f"ADO closed {start} to {end}"
 
 
 async def _create_completed_job(
@@ -208,6 +227,7 @@ async def import_file(
     return {
         "job_id": str(job_id),
         "import_batch_id": str(batch_id),
+        "ado_ids": [int(defect["ado_id"]) for defect in parsed["defects"]],
         "upserted": upserted,
         "preview": {
             "detected_columns": parsed["detected_columns"],
@@ -266,6 +286,7 @@ async def sync_ado(
         defects=defects,
         errors=[],
         user_id=_validate_user_id(user_id),
+        label=f"ADO closed {start_date} to {end_date}",
     )
     upserted = await _upsert_defects(database, project_id, batch_id, defects)
     job_id = await _create_completed_job(
@@ -399,6 +420,9 @@ async def seed_import(
     """Import defects like /internal/imports and return their QA-confirmed RCA labels."""
     imported = await import_file(
         request, file, project_id, user_id, mapping_json, authorization
+    )
+    await _database(request)["import_batches"].update_one(
+        {"_id": ObjectId(imported["import_batch_id"])}, {"$set": {"purpose": "KNOWLEDGE"}}
     )
     await file.seek(0)
     content = await file.read(settings.max_import_file_bytes + 1)
@@ -576,6 +600,7 @@ async def ado_pull(
         defects=defects,
         errors=[],
         user_id=_validate_user_id(user_id),
+        label=_pull_label(body.mode, body.query_link, body.work_item_ids, body.start_date, body.end_date),
     )
     upserted = await _upsert_defects(database, project_id, batch_id, defects)
     job_id = await _create_completed_job(
@@ -678,6 +703,8 @@ async def ado_seed_pull(
         defects=defects,
         errors=[],
         user_id=_validate_user_id(user_id),
+        label=_pull_label(body.mode, body.query_link, body.work_item_ids, body.start_date, body.end_date),
+        purpose="KNOWLEDGE",
     )
     upserted = await _upsert_defects(database, project_id, batch_id, defects)
     await _create_completed_job(
@@ -696,3 +723,63 @@ async def ado_seed_pull(
         "rca_columns": {"root_cause": rca_ref},
         "confirmed": confirmed,
     }
+
+def _batch_view(batch: dict[str, Any]) -> dict[str, Any]:
+    created = batch.get("created_at")
+    return {
+        "id": str(batch["_id"]),
+        "source": batch.get("source"),
+        "label": batch.get("label") or batch.get("filename") or batch.get("source"),
+        "filename": batch.get("filename"),
+        "defects": len(batch.get("ado_ids") or []) or int(batch.get("accepted") or 0),
+        "rows": int(batch.get("row_count") or 0),
+        "created_at": created.isoformat() if isinstance(created, datetime) else created,
+    }
+
+
+@router.get("/internal/projects/{project_id}/import-batches")
+async def list_import_batches(
+    request: Request,
+    project_id: str,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Recent defect imports (Excel uploads and ADO pulls), newest first; knowledge ingestion excluded."""
+    _require_gateway(authorization)
+    _validate_project_id(project_id)
+    cursor = (
+        _database(request)["import_batches"]
+        .find({"project_id": project_id, "purpose": {"$ne": "KNOWLEDGE"}, "accepted": {"$gt": 0}})
+        .sort("created_at", -1)
+        .limit(limit)
+    )
+    return {"batches": [_batch_view(batch) for batch in await cursor.to_list(length=limit)]}
+
+
+@router.get("/internal/projects/{project_id}/import-batches/{batch_id}")
+async def get_import_batch(
+    request: Request,
+    project_id: str,
+    batch_id: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """One import with the IDs of the defects it brought in."""
+    _require_gateway(authorization)
+    _validate_project_id(project_id)
+    try:
+        object_id = ObjectId(batch_id)
+    except InvalidId as exc:
+        raise HTTPException(status_code=404, detail={"code": "IMPORT_NOT_FOUND"}) from exc
+    database = _database(request)
+    batch = await database["import_batches"].find_one({"_id": object_id, "project_id": project_id})
+    if batch is None:
+        raise HTTPException(status_code=404, detail={"code": "IMPORT_NOT_FOUND"})
+    ado_ids = batch.get("ado_ids")
+    if not ado_ids:  # imports recorded before ado_ids existed
+        ado_ids = [
+            doc["ado_id"]
+            async for doc in database["defects"].find(
+                {"project_id": project_id, "import_batch_id": object_id}, {"ado_id": 1}
+            )
+        ]
+    return {**_batch_view(batch), "ado_ids": sorted(int(item) for item in ado_ids)}

@@ -40,11 +40,21 @@ export type KnowledgeStats = {
   current_embedding_model: string;
 };
 
+export type RcaStatus = "AI_PROPOSED" | "NEEDS_MANUAL_RCA" | "APPROVED" | "CORRECTED" | "REJECTED";
+
+export const RCA_STATUS_LABELS: Record<RcaStatus, string> = {
+  AI_PROPOSED: "AI proposed",
+  NEEDS_MANUAL_RCA: "Needs manual RCA",
+  APPROVED: "Approved",
+  CORRECTED: "Corrected",
+  REJECTED: "Rejected",
+};
+
 export type RcaView = {
   id: string;
-  status: "AI_PROPOSED" | "NEEDS_MANUAL_RCA" | "APPROVED" | "CORRECTED";
+  status: RcaStatus;
   version: number;
-  final?: { root_cause: Coded; sdlc_phase: Coded; testing_gap: Coded; note?: string | null } | null;
+  final?: { root_cause: Coded | null; sdlc_phase: Coded | null; testing_gap: Coded | null; note?: string | null } | null;
   reviewed_at?: string | null;
   cited_cases?: CaseView[];
   retrieved_cases?: CaseView[];

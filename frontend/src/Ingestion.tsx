@@ -1,6 +1,7 @@
 import { Database, FileSpreadsheet, GitBranch, UploadCloud } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { api, errorMessage, type KnowledgeStats } from "./api";
+import { ConfirmedNotice } from "./ConfirmedNotice";
 
 type Source = "excel" | "ado";
 type Report = {
@@ -8,6 +9,7 @@ type Report = {
   confirmed_rows: number;
   seeded: number;
   skipped_reviewed: number;
+  already_confirmed_ids?: number[];
   knowledge_status: string | null;
   rca_columns: Record<string, string>;
   unmapped: { ado_id: number; issues: { field: string; value: string }[] }[];
@@ -205,9 +207,13 @@ export function Ingestion({ projectId, csrfToken }: { projectId: string; csrfTok
             <Result value={report.rows_total} label="Defects read" />
             <Result value={report.confirmed_rows} label="With confirmed RCA" />
             <Result value={report.seeded} label="Ingested" />
-            <Result value={report.skipped_reviewed} label="Already reviewed (kept)" />
+            <Result value={report.skipped_reviewed} label="Already confirmed (skipped)" />
             <Result value={report.unmapped.length} label="Labels not in taxonomy" />
           </div>
+          <ConfirmedNotice
+            ids={report.already_confirmed_ids ?? []}
+            message="They are already in the knowledge base, so they were not ingested again."
+          />
           {report.knowledge_status === "PENDING_EMBEDDING" && (
             <p className="notice">Entries are stored and will be embedded once an embedding key is configured.</p>
           )}

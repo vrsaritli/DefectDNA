@@ -64,7 +64,7 @@ const summary = {
   note: "Counts include approved and corrected RCAs only.",
 };
 
-export type MockState = { mustChangePassword: boolean; reviews: unknown[]; role: string };
+export type MockState = { mustChangePassword: boolean; reviews: unknown[]; role: string; analyses?: unknown[] };
 
 export async function mockApi(page: Page, state: MockState): Promise<void> {
   const json = (route: Route, body: unknown, status = 200) =>
@@ -104,6 +104,32 @@ export async function mockApi(page: Page, state: MockState): Promise<void> {
     }
     if (path.endsWith("/knowledge/stats")) {
       return json(route, { total: 1, active: 1, pending_embedding: 0, by_source: {}, rag_enabled: true, current_embedding_model: "embed-english-v3.0" });
+    }
+    if (path.endsWith("/import-batches")) {
+      return json(route, {
+        batches: [
+          { id: "batch-1", source: "ADO_QUERY", label: "Query 1a2b3c4d", defects: 3, created_at: "2026-11-20T10:00:00Z" },
+          { id: "batch-0", source: "CSV_IMPORT", label: "defects.xlsx", defects: 5, created_at: "2026-11-19T10:00:00Z" },
+        ],
+      });
+    }
+    if (path.endsWith("/ado-connection")) {
+      return json(route, { connected: true, organization: "https://dev.azure.com/acme", project: "Shop", source: "project", checked_at: "2026-11-22T10:00:00Z", pat_configured: true });
+    }
+    if (path.endsWith("/analyses") && method === "POST") {
+      (state.analyses ??= []).push(route.request().postDataJSON());
+      return json(route, { job_id: null, queued: 0, skipped_reviewed: 2, skipped_reviewed_ids: [303, 450], skipped_already_analyzed: 1, remaining: 0, import_label: "Query 1a2b3c4d" });
+    }
+    if (path.endsWith("/defects")) {
+      return json(route, {
+        total: 1,
+        defects: [
+          {
+            ado_id: 419, title: rca.defect.title, module: rca.defect.module, release: "Release 1", state: "Closed",
+            rca: { id: "rca-1", status: "AI_PROPOSED", root_cause: code("CODE", "Code"), sdlc_phase: code("DEVELOPMENT", "Development"), testing_gap: code("NO_TEST_CASE", "No test case"), confidence: 0.82 },
+          },
+        ],
+      });
     }
     if (path.endsWith("/rcas")) return json(route, { total: 1, rcas: [rca] });
     if (path === "/rcas/rca-1/review" && method === "POST") {

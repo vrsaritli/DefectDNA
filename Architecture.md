@@ -84,13 +84,13 @@ Roles are assigned **per project**. A user may be QA Lead on one project and Vie
 | Export data | ✔ | ✔ | ✔ |
 | Upload CSV/XLSX, trigger ADO sync, trigger analysis | ✘ | ✔ | ✔ |
 | Knowledge ingestion: load confirmed RCAs from Excel or an ADO query into the knowledge base | ✘ | ✘ | ✔ |
-| Approve / correct an RCA | ✘ | ✔ | ✘* |
+| Approve / correct (edit) / reject / reopen an RCA | ✘ | ✔ | ✔* |
 | Manage taxonomies, accept `Other` categories | ✘ | ✔ | ✔ |
 | Manage users and roles | ✘ | ✘ | ✔ |
 | Configure ADO connection and system settings | ✘ | ✘ | ✔ |
 | Delete project data | ✘ | ✘ | ✔ |
 
-\* An Admin who also holds the QA Lead role on a project can approve there. Keeping approval tied to the QA Lead role protects the knowledge base.
+\* **Decided (as built):** Admin has end-to-end access, including RCA review. Every review decision is audited (`RCA_APPROVED`, `RCA_CORRECTED`, `RCA_REJECTED`, `RCA_REOPENED`) with the reviewer's user ID. A **rejected** RCA (`REJECTED`) is not confirmed: it never enters the knowledge base or trends, and can later be corrected, reopened or re-analyzed.
 
 ## 9. MVP Scope
 
@@ -259,7 +259,9 @@ sequenceDiagram
   8. **Knowledge ingestion** (Admin only): radio choice of source, Excel file or Azure DevOps saved query; confirmed root causes (column `Root Cause (RCA)` or the ADO `RCA` field) become approved knowledge entries in MongoDB
 - **Shell (as built):** left sidebar (brand, project switcher, Workspace and Administration navigation, user card with role and sign-out) plus a page header with breadcrumb; split-screen sign-in.
 - **Security in the UI:** render all defect text as plain text (no raw HTML); role-based menu hiding is cosmetic only, as the gateway enforces authorization.
-- **Design system (as built):** in-app tokens in `frontend/src/style.css` (slate neutrals, indigo primary, navy sidebar, 8/12 px radii, status colours always paired with text), `lucide-react` icons, layout pattern after shadcn-admin. No external fonts or CDNs.
+- **Design system (as built):** in-app tokens in `frontend/src/style.css`: Infinite Dark Green `#293E40` anchor (sidebar, sign-in panel, headings, links), Wasabi Mint `#81B5A1` accent (call-to-action buttons, focus ring, active navigation), soft off-white and cool neutral surfaces, 8/12 px radii, status colours always paired with text. The deep slate-green and calm mint replace a corporate blue to reduce eye strain in long IT workflows. `lucide-react` icons, layout pattern after shadcn-admin. No external fonts or CDNs.
+- **Import-scoped analysis (as built):** the AI analysis page lists Excel and ADO imports (`import_batches` with `purpose = IMPORT`; knowledge ingestion runs are `purpose = KNOWLEDGE` and excluded). **Analyze defects** sends `import_batch_id`; the gateway resolves the batch's defect IDs. Imports, pulls, analysis runs and ingestion return the IDs of defects that already have a confirmed RCA, shown in the UI; those defects are never re-analyzed or ingested twice. The review panel links each defect to its Azure DevOps work item.
+- **Defect register (as built):** each row carries its latest RCA (root cause, SDLC phase, testing gap), the AI confidence, and the status (AI proposed, needs manual RCA, approved, corrected, rejected, confirmed by ingestion).
 
 ## 15. Backend Architecture
 
@@ -534,7 +536,8 @@ erDiagram
 | GET | `/jobs/{job_id}` | Job status and progress | Viewer |
 | GET | `/projects/{pid}/rcas` | List RCAs (filter by status) | Viewer |
 | GET | `/rcas/{rca_id}` | RCA detail with cited cases | Viewer |
-| POST | `/rcas/{rca_id}/review` | Approve or correct | QA Lead |
+| POST | `/rcas/{rca_id}/review` | Approve, correct or reject (`decision`: `APPROVE` / `CORRECT` / `REJECT`) | QA Lead, Admin |
+| GET | `/projects/{id}/import-batches` | Excel and ADO imports (not knowledge ingestion runs) for import-scoped analysis | Any project role |
 | POST | `/projects/{pid}/knowledge/seed` | Knowledge ingestion from Excel/CSV with a confirmed RCA column | Admin |
 | POST | `/projects/{pid}/knowledge/seed-ado` | Knowledge ingestion from an ADO saved query, reading the RCA field | Admin |
 | GET/PUT | `/projects/{pid}/ado-connection` | Live ADO status with the server PAT / set organization and project | QA Lead / Admin |

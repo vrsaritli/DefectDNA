@@ -90,11 +90,13 @@ async def create_analysis_job(
     existing = await latest_by_defect(database, project_id, list(unique))
     queued: list[dict[str, Any]] = []
     skipped_reviewed = 0
+    skipped_reviewed_ids: list[int] = []
     skipped_analyzed = 0
     for ado_id, defect in unique.items():
         latest = existing.get(ado_id)
         if latest is not None and latest["status"] in REVIEWED_STATUSES:
             skipped_reviewed += 1
+            skipped_reviewed_ids.append(ado_id)
         elif latest is not None and not body.reanalyze:
             skipped_analyzed += 1
         else:
@@ -104,6 +106,7 @@ async def create_analysis_job(
         "job_id": None,
         "queued": len(queued),
         "skipped_reviewed": skipped_reviewed,
+        "skipped_reviewed_ids": sorted(skipped_reviewed_ids),
         "skipped_already_analyzed": skipped_analyzed,
         "taxonomy_version": body.taxonomy.version,
     }
@@ -162,10 +165,17 @@ async def list_rcas(
     status: str | None = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 50,
+    defect_ids: Annotated[str | None, Query(max_length=20_000)] = None,
 ) -> dict[str, Any]:
     _require_gateway(authorization)
     _validate_project_id(project_id)
     query: dict[str, Any] = {"project_id": project_id}
+    if defect_ids is not None:
+        try:
+            ids = [int(item) for item in defect_ids.split(",") if item.strip()]
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail={"code": "INVALID_DEFECT_IDS"}) from exc
+        query["defect_id"] = {"$in": ids}
     if status:
         if status not in RCA_STATUSES:
             raise HTTPException(status_code=422, detail={"code": "INVALID_STATUS"})

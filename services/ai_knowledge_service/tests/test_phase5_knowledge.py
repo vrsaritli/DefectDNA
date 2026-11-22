@@ -206,6 +206,33 @@ def test_reopen_removes_knowledge_and_trend(
     assert again.status_code == 409
 
 
+def test_reject_keeps_proposal_out_of_knowledge_and_can_be_corrected(
+    aik: tuple[TestClient, Any, dict[str, str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, mongo, headers = aik
+    _use_embedder(monkeypatch, FakeEmbedder())
+    rca_id = _insert_rca(mongo, 25, "Saved card cannot be deleted")
+    database = mongo["defectdna"]
+
+    rejected = _review(client, headers, rca_id, decision="REJECT", note="Not a code issue")
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "REJECTED"
+    assert asyncio.run(database["knowledge_entries"].count_documents({})) == 0
+    assert asyncio.run(database["jobs"].count_documents({"type": TREND_FACT_JOB})) == 0
+    assert _review(client, headers, rca_id, decision="REJECT").status_code == 409
+
+    corrected = _review(
+        client,
+        headers,
+        rca_id,
+        decision="CORRECT",
+        final={"root_cause_code": "REQUIREMENTS", "sdlc_phase_code": "REQUIREMENTS", "testing_gap_code": "NO_TEST_CASE"},
+    )
+    assert corrected.status_code == 200, corrected.text
+    assert corrected.json()["status"] == "CORRECTED"
+    assert asyncio.run(database["knowledge_entries"].count_documents({})) == 1
+
+
 def test_seed_import_creates_approved_rcas_and_entries(
     aik: tuple[TestClient, Any, dict[str, str]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -226,7 +253,12 @@ def test_seed_import_creates_approved_rcas_and_entries(
         ],
     }
     seeded = client.post("/internal/projects/project-a/knowledge/seed", json=body, headers=headers)
-    assert seeded.json() == {"seeded": 2, "skipped_reviewed": 0, "knowledge_status": "ACTIVE"}
+    assert seeded.json() == {
+        "seeded": 2,
+        "skipped_reviewed": 0,
+        "skipped_reviewed_ids": [],
+        "knowledge_status": "ACTIVE",
+    }
 
     database = mongo["defectdna"]
     rca = asyncio.run(database["rca_analyses"].find_one({"defect_id": 31}))
@@ -239,6 +271,7 @@ def test_seed_import_creates_approved_rcas_and_entries(
 
     again = client.post("/internal/projects/project-a/knowledge/seed", json=body, headers=headers)
     assert again.json()["skipped_reviewed"] == 2
+    assert again.json()["skipped_reviewed_ids"] == [31, 32]  # no duplicate ingestion
 
     bad = {**body, "items": [{**body["items"][0], "final": {"root_cause_code": "NOPE"}}]}
     assert client.post("/internal/projects/project-a/knowledge/seed", json=bad, headers=headers).status_code == 422

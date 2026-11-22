@@ -11,7 +11,10 @@ from pymongo import ReturnDocument
 from services.ai_knowledge_service.app.analysis import AnalysisOutcome
 
 REVIEWED_STATUSES = frozenset({"APPROVED", "CORRECTED"})
-RCA_STATUSES = frozenset({"AI_PROPOSED", "NEEDS_MANUAL_RCA", *REVIEWED_STATUSES})
+# Reviewer rejected the AI proposal: not confirmed, so never in the knowledge base or trends,
+# and it may be corrected, re-opened or re-analyzed later.
+REJECTED = "REJECTED"
+RCA_STATUSES = frozenset({"AI_PROPOSED", "NEEDS_MANUAL_RCA", REJECTED, *REVIEWED_STATUSES})
 
 
 async def ensure_aik_indexes(database: AsyncIOMotorDatabase[dict[str, Any]]) -> None:

@@ -120,16 +120,28 @@ def _login(client: TestClient, username: str) -> dict[str, str]:
     return {"X-CSRF-Token": response.json()["csrf_token"]}
 
 
-def test_only_qa_lead_can_review_and_unknown_codes_are_rejected(
+def test_only_qa_lead_and_admin_can_review_and_unknown_codes_are_rejected(
     gateway: tuple[TestClient, Any, dict[str, Any]],
 ) -> None:
     client, database, calls = gateway
+    _user(database, "viewer@example.test", "VIEWER")
     _user(database, "admin@example.test", "ADMIN")
     _user(database, "lead@example.test", "QA_LEAD")
 
-    admin = _login(client, "admin@example.test")
-    denied = client.post(f"/api/v1/rcas/{RCA_ID}/review", json={"decision": "APPROVE"}, headers=admin)
+    viewer = _login(client, "viewer@example.test")
+    denied = client.post(f"/api/v1/rcas/{RCA_ID}/review", json={"decision": "APPROVE"}, headers=viewer)
     assert denied.status_code == 403
+
+    admin = _login(client, "admin@example.test")
+    admin_bad = client.post(
+        f"/api/v1/rcas/{RCA_ID}/review",
+        json={
+            "decision": "CORRECT",
+            "final": {"root_cause_code": "NOPE", "sdlc_phase_code": "DESIGN", "testing_gap_code": "NO_TEST_CASE"},
+        },
+        headers=admin,
+    )
+    assert admin_bad.status_code == 422  # Admin passes the role check (end-to-end access)
 
     lead = _login(client, "lead@example.test")
     bad = client.post(

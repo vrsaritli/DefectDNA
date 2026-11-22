@@ -161,9 +161,10 @@ uvicorn services.ai_knowledge_service.app.main:app --reload --port 8002
 python -m services.ai_knowledge_service.app.worker
 ```
 
-4. In the app, open **AI analysis** → **Analyze new closed defects**. Progress
-   is polled from `/api/v1/jobs/{id}`; open any row to see the defect next to the
-   AI proposal.
+4. In the app, open **AI analysis**, pick an import (an Excel file or Azure DevOps
+   query pulled on the Import page) and click **Analyze defects**. Only that import's
+   defects are analyzed. Progress is polled from `/api/v1/jobs/{id}`; open any row to see
+   the defect next to the AI proposal, with an **Open in Azure DevOps** link.
 
 ### New endpoints
 
@@ -359,12 +360,31 @@ Release approver (P5), monitoring tool (P6), data-handling approval for real def
 
 - **Enterprise UI:** sidebar shell (brand, project switcher, Workspace and Administration
   navigation, user card with role and sign-out), page header with breadcrumb,
-  split-screen sign-in, and one design-token stylesheet (slate neutrals, indigo primary,
-  status colours paired with text, `lucide-react` icons; no external fonts or CDNs).
+  split-screen sign-in, and one design-token stylesheet (Infinite Dark Green `#293E40`
+  anchor, Wasabi Mint `#81B5A1` accent, soft off-white and cool neutrals, status colours
+  paired with text, `lucide-react` icons; no external fonts or CDNs).
 - **Ingestion page (Admin only):** loads historical defects with a confirmed root cause
   into the MongoDB knowledge base. A radio choice selects the source:
   - **Excel file:** XLSX/CSV with ID, Title and `Root Cause (RCA)`.
   - **Azure DevOps query:** a saved query link; the RCA field is found by name
     (`Root Cause (RCA)`, then `RCA`, which is `Custom.RCA` in the demo project).
-  The report shows defects read, confirmed, ingested, already reviewed, and labels that
+  The report shows defects read, confirmed, ingested, already confirmed, and labels that
   are not in the taxonomy.
+
+### Import-scoped analysis, review and the defect register
+
+- **Analyze defects** (AI analysis page) works on one import at a time: the Excel file
+  or Azure DevOps query pulled on the Import page (`import_batch_id`). Knowledge
+  ingestion runs are not listed, because their RCAs are already confirmed.
+- **Already-confirmed defects:** imports, ADO pulls, analysis runs and knowledge
+  ingestion list the defect IDs that already have a confirmed RCA. Those defects are
+  not analyzed again or ingested twice.
+- **Review:** QA Lead **and Admin** can approve, edit (correct) or **reject** an AI
+  proposal, and reopen a review. A rejected RCA stays out of the knowledge base and
+  trends; it can be corrected, reopened or re-analyzed later.
+- **Defect register:** each row shows the latest RCA (root cause, SDLC phase, testing
+  gap), the AI confidence, and the status (AI proposed, needs manual RCA, approved,
+  corrected, rejected, or confirmed by ingestion).
+- New endpoint: `GET /api/v1/projects/{id}/import-batches`; `POST /analyses` and
+  `GET /rcas` accept `import_batch_id`; `POST /rcas/{id}/review` accepts
+  `decision: "REJECT"`.

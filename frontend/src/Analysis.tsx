@@ -1,10 +1,13 @@
+import { ExternalLink } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ConfirmedNotice } from "./ConfirmedNotice";
 import {
   api,
   errorMessage,
   type CaseView,
   type JobStatus,
   type KnowledgeStats,
+  RCA_STATUS_LABELS,
   type RcaView,
   type Taxonomy,
 } from "./api";
@@ -26,16 +29,32 @@ type AnalysisResponse = {
   job_id: string | null;
   queued: number;
   skipped_reviewed: number;
+  skipped_reviewed_ids?: number[];
   skipped_already_analyzed: number;
   remaining: number;
+  import_label?: string | null;
 };
 
-const STATUS_LABELS: Record<RcaView["status"], string> = {
-  AI_PROPOSED: "AI proposed",
-  NEEDS_MANUAL_RCA: "Needs manual RCA",
-  APPROVED: "Approved",
-  CORRECTED: "Corrected",
+type ImportBatch = {
+  id: string;
+  source: string;
+  label: string;
+  defects: number;
+  created_at: string | null;
 };
+
+function batchText(batch: ImportBatch): string {
+  const kind = batch.source === "CSV_IMPORT" ? "Excel" : "Azure DevOps";
+  const when = batch.created_at ? new Date(batch.created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
+  return `${kind} · ${batch.label} · ${batch.defects} defect${batch.defects === 1 ? "" : "s"}${when ? ` · ${when}` : ""}`;
+}
+
+function adoLink(org: string | null | undefined, project: string | null | undefined, id: number): string | null {
+  if (!org || !project) return null;
+  return `${org.replace(/\/$/, "")}/${encodeURIComponent(project)}/_workitems/edit/${id}`;
+}
+
+const CONFIRMED = new Set<RcaView["status"]>(["APPROVED", "CORRECTED"]);
 
 const FAILURE_HINTS: Record<string, string> = {
   LLM_DAILY_CAP_REACHED: "The project's daily AI call limit was reached.",
@@ -56,14 +75,44 @@ export function Analysis({
   canAnalyze,
   canReview,
   csrfToken,
+  initialBatchId,
 }: {
   projectId: string;
   canAnalyze: boolean;
   canReview: boolean;
   csrfToken: string;
+  initialBatchId?: string | null;
 }) {
+  const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [batchId, setBatchId] = useState<string>(initialBatchId ?? "");
+  const [skippedIds, setSkippedIds] = useState<number[]>([]);
+  const [ado, setAdo] = useState<{ connected: boolean; organization: string | null; project: string | null } | null>(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+    api<{ batches: ImportBatch[] }>(`/api/v1/projects/${encodeURIComponent(projectId)}/import-batches`)
+      .then((response) => {
+        setBatches(response.batches);
+        setBatchId((current) =>
+          current && response.batches.some((batch) => batch.id === current) ? current : response.batches[0]?.id ?? "",
+        );
+      })
+      .catch(() => setBatches([]));
+    if (canAnalyze) {
+      api<{ connected: boolean; organization: string | null; project: string | null }>(
+        `/api/v1/projects/${encodeURIComponent(projectId)}/ado-connection`,
+      )
+        .then(setAdo)
+        .catch(() => setAdo(null));
+    }
+  }, [projectId, canAnalyze]);
+
+  useEffect(() => {
+    if (initialBatchId) setBatchId(initialBatchId);
+  }, [initialBatchId]);
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [correcting, setCorrecting] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
   const [draft, setDraft] = useState({ root_cause_code: "", sdlc_phase_code: "", testing_gap_code: "" });
   const [note, setNote] = useState("");
 
@@ -98,6 +147,7 @@ export function Analysis({
     if (!projectId) return;
     const params = new URLSearchParams({ page_size: "100" });
     if (statusFilter) params.set("status", statusFilter);
+    if (batchId) params.set("import_batch_id", batchId);
     try {
       const response = await api<{ rcas: RcaView[]; total: number }>(
         `/api/v1/projects/${encodeURIComponent(projectId)}/rcas?${params.toString()}`,
@@ -107,7 +157,7 @@ export function Analysis({
     } catch (err) {
       setError(errorMessage(err, "Could not load RCAs"));
     }
-  }, [projectId, statusFilter]);
+  }, [projectId, statusFilter, batchId]);
 
   useEffect(() => {
     setSelected(null);
@@ -144,21 +194,29 @@ export function Analysis({
   }
 
   async function startAnalysis(reanalyze: boolean) {
+    if (!batchId) return;
     setBusy(true);
     setError("");
     setMessage("");
+    setSkippedIds([]);
     try {
       const response = await api<AnalysisResponse>(
         `/api/v1/projects/${encodeURIComponent(projectId)}/analyses`,
-        { method: "POST", body: JSON.stringify({ reanalyze }) },
+        { method: "POST", body: JSON.stringify({ import_batch_id: batchId, reanalyze }) },
         csrfToken,
       );
+      setSkippedIds(response.skipped_reviewed_ids ?? []);
       if (!response.job_id) {
-        setMessage("No closed defects are waiting for analysis.");
+        setMessage(
+          response.skipped_already_analyzed
+            ? `All defects in this import are already analyzed. Use “Re-analyze unreviewed” to run them again.`
+            : "Nothing to analyze in this import.",
+        );
         return;
       }
       setMessage(
-        `Queued ${response.queued} defect(s) for AI analysis` +
+        `Queued ${response.queued} defect(s) from “${response.import_label ?? "this import"}” for AI analysis` +
+          (response.skipped_already_analyzed ? `; ${response.skipped_already_analyzed} already analyzed were skipped` : "") +
           (response.remaining ? `; ${response.remaining} more will need another run.` : "."),
       );
       setJob(null);
@@ -171,7 +229,7 @@ export function Analysis({
   }
 
   function startCorrection(rca: RcaView) {
-    const source = rca.final ?? rca.proposed;
+    const source = rca.final?.root_cause ? rca.final : rca.proposed;
     setDraft({
       root_cause_code: source?.root_cause?.code ?? "",
       sdlc_phase_code: source?.sdlc_phase?.code ?? "",
@@ -181,12 +239,12 @@ export function Analysis({
     setCorrecting(true);
   }
 
-  async function submitReview(decision: "APPROVE" | "CORRECT") {
+  async function submitReview(decision: "APPROVE" | "CORRECT" | "REJECT") {
     if (!selected) return;
     setBusy(true);
     setError("");
     setMessage("");
-    const reopen = selected.status === "APPROVED" || selected.status === "CORRECTED";
+    const reopen = CONFIRMED.has(selected.status);
     try {
       const updated = await api<RcaView>(
         `/api/v1/rcas/${encodeURIComponent(selected.id)}/review`,
@@ -195,18 +253,27 @@ export function Analysis({
           body: JSON.stringify(
             decision === "APPROVE"
               ? { decision, reopen }
-              : { decision, reopen, final: draft, note: note.trim() || null },
+              : decision === "REJECT"
+                ? { decision, reopen, note: note.trim() || null }
+                : { decision, reopen, final: draft, note: note.trim() || null },
           ),
         },
         csrfToken,
       );
       setSelected(updated);
       setCorrecting(false);
-      const kb =
-        (updated as RcaView & { knowledge_status?: string }).knowledge_status === "PENDING_EMBEDDING"
-          ? " It joins the knowledge base once embeddings are configured."
-          : " It is now in the knowledge base and the dashboard trends.";
-      setMessage(`#${updated.defect.ado_id} ${updated.status === "APPROVED" ? "approved" : "corrected"}.${kb}`);
+      setRejecting(false);
+      if (updated.status === "REJECTED") {
+        setMessage(
+          `#${updated.defect.ado_id} rejected. It stays out of the knowledge base and trends; correct it or re-analyze it later.`,
+        );
+      } else {
+        const kb =
+          (updated as RcaView & { knowledge_status?: string }).knowledge_status === "PENDING_EMBEDDING"
+            ? " It joins the knowledge base once embeddings are configured."
+            : " It is now in the knowledge base and the dashboard trends.";
+        setMessage(`#${updated.defect.ado_id} ${updated.status === "APPROVED" ? "approved" : "corrected"}.${kb}`);
+      }
       await loadRcas();
       loadKnowledge();
     } catch (err) {
@@ -228,7 +295,7 @@ export function Analysis({
         csrfToken,
       );
       setSelected(updated);
-      setMessage(`#${updated.defect.ado_id} reopened: removed from the knowledge base and trends.`);
+      setMessage(`#${updated.defect.ado_id} reopened: back to the AI proposal, out of the knowledge base and trends.`);
       await loadRcas();
       loadKnowledge();
     } catch (err) {
@@ -242,6 +309,7 @@ export function Analysis({
     setSelected(rca);
     setDefect(null);
     setCorrecting(false);
+    setRejecting(false);
     try {
       const [detail, fresh] = await Promise.all([
         api<{ defect: DefectDetail }>(
@@ -263,12 +331,31 @@ export function Analysis({
   return (
     <section className="content-card">
       <div className="analysis-toolbar">
+        <label className="batch-select">
+          Imported defects
+          <select
+            aria-label="Imported defects"
+            disabled={batches.length === 0}
+            onChange={(event) => setBatchId(event.target.value)}
+            value={batchId}
+          >
+            {batches.length === 0 && <option value="">No imports yet</option>}
+            {batches.map((batch) => (
+              <option key={batch.id} value={batch.id}>
+                {batchText(batch)}
+              </option>
+            ))}
+          </select>
+        </label>
         <label>
           Status
           <select onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
             <option value="">All</option>
             <option value="AI_PROPOSED">AI proposed</option>
             <option value="NEEDS_MANUAL_RCA">Needs manual RCA</option>
+            <option value="APPROVED">Approved</option>
+            <option value="CORRECTED">Corrected</option>
+            <option value="REJECTED">Rejected</option>
           </select>
         </label>
         <button className="secondary" onClick={() => void loadRcas()} type="button">
@@ -292,24 +379,34 @@ export function Analysis({
           <div className="analysis-actions">
             <button
               className="secondary"
-              disabled={busy || Boolean(running)}
+              disabled={busy || Boolean(running) || !batchId}
               onClick={() => void startAnalysis(true)}
-              title="Re-run AI analysis on closed defects that are not yet reviewed"
+              title="Re-run AI analysis on the selected import's defects that are not yet reviewed"
               type="button"
             >
               Re-analyze unreviewed
             </button>
             <button
               className="primary"
-              disabled={busy || Boolean(running)}
+              disabled={busy || Boolean(running) || !batchId}
               onClick={() => void startAnalysis(false)}
+              title="Analyze the defects from the selected Excel import or Azure DevOps query"
               type="button"
             >
-              {running ? "Analyzing…" : "Analyze new closed defects"}
+              {running ? "Analyzing…" : "Analyze defects"}
             </button>
           </div>
         )}
       </div>
+      {batches.length === 0 && (
+        <p className="muted">
+          Import defects on the Import page (Excel file or Azure DevOps query) to analyze them here.
+        </p>
+      )}
+      <ConfirmedNotice
+        ids={skippedIds}
+        message="They were not sent for analysis again; their reviewed RCA stays in the knowledge base."
+      />
 
       {job && (
         <div className="job-progress" aria-live="polite">
@@ -359,7 +456,7 @@ export function Analysis({
                   <td>{rca.proposed?.testing_gap?.label ?? "—"}</td>
                   <td>{rca.proposed ? `${Math.round(rca.proposed.confidence * 100)}%` : "—"}</td>
                   <td>
-                    <span className={`rca-pill ${rca.status.toLowerCase()}`}>{STATUS_LABELS[rca.status]}</span>
+                    <span className={`rca-pill ${rca.status.toLowerCase()}`}>{RCA_STATUS_LABELS[rca.status]}</span>
                   </td>
                 </tr>
               ))}
@@ -384,6 +481,16 @@ export function Analysis({
               <h2>
                 #{selected.defect.ado_id} {selected.defect.title}
               </h2>
+              {adoLink(ado?.organization, ado?.project, selected.defect.ado_id) && (
+                <a
+                  className="ado-link"
+                  href={adoLink(ado?.organization, ado?.project, selected.defect.ado_id) ?? undefined}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  <ExternalLink aria-hidden="true" size={14} /> Open in Azure DevOps
+                </a>
+              )}
             </div>
             <button
               aria-label="Close review"
@@ -455,9 +562,18 @@ export function Analysis({
             </div>
           </div>
           <SimilarCases rca={selected} />
-          {selected.final && (
+          {selected.status === "REJECTED" && (
+            <div className="final-box rejected-box">
+              <h3 className="column-title">AI proposal rejected</h3>
+              <p className="muted">
+                Not in the knowledge base or trends. Correct it with the right RCA, reopen it, or re-analyze it.
+              </p>
+              {selected.final?.note && <Field label="Reviewer note" value={selected.final.note} />}
+            </div>
+          )}
+          {selected.final?.root_cause && (
             <div className="final-box">
-              <h3 className="column-title">Confirmed RCA · {STATUS_LABELS[selected.status]}</h3>
+              <h3 className="column-title">Confirmed RCA · {RCA_STATUS_LABELS[selected.status]}</h3>
               <div className="final-grid">
                 <Classification label="Root cause" value={selected.final.root_cause} />
                 <Classification label="SDLC phase introduced" value={selected.final.sdlc_phase} />
@@ -494,21 +610,50 @@ export function Analysis({
                   </button>
                 </div>
               </div>
+            ) : rejecting ? (
+              <div className="review-form">
+                <h3 className="column-title">Reject the AI proposal</h3>
+                <label>
+                  Reason (optional)
+                  <textarea maxLength={2000} onChange={(event) => setNote(event.target.value)} rows={2} value={note} />
+                </label>
+                <div className="review-buttons">
+                  <button className="danger" disabled={busy} onClick={() => void submitReview("REJECT")} type="button">
+                    Confirm reject
+                  </button>
+                  <button className="text-button" onClick={() => setRejecting(false)} type="button">
+                    Cancel
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="review-buttons">
-                {selected.proposed && (selected.status === "AI_PROPOSED" || selected.status === "NEEDS_MANUAL_RCA") && (
+                {selected.proposed && !CONFIRMED.has(selected.status) && (
                   <button className="primary" disabled={busy} onClick={() => void submitReview("APPROVE")} type="button">
                     Approve AI proposal
                   </button>
                 )}
                 <button className="secondary" disabled={busy || !taxonomy} onClick={() => startCorrection(selected)} type="button">
-                  {selected.status === "APPROVED" || selected.status === "CORRECTED"
-                    ? "Change confirmed RCA"
+                  {CONFIRMED.has(selected.status)
+                    ? "Edit confirmed RCA"
                     : selected.proposed
-                      ? "Correct"
+                      ? "Edit RCA"
                       : "Classify manually"}
                 </button>
-                {(selected.status === "APPROVED" || selected.status === "CORRECTED") && (
+                {selected.proposed && selected.status !== "REJECTED" && (
+                  <button
+                    className="danger-outline"
+                    disabled={busy}
+                    onClick={() => {
+                      setNote("");
+                      setRejecting(true);
+                    }}
+                    type="button"
+                  >
+                    Reject
+                  </button>
+                )}
+                {(CONFIRMED.has(selected.status) || selected.status === "REJECTED") && (
                   <button
                     className="text-button"
                     disabled={busy}
@@ -522,7 +667,7 @@ export function Analysis({
               </div>
             )
           ) : (
-            <p className="notice">Only a QA Lead on this project can approve or correct RCAs.</p>
+            <p className="notice">Only a QA Lead or Admin on this project can approve, edit or reject RCAs.</p>
           )}
         </div>
       )}

@@ -201,6 +201,7 @@ async def _seed_confirmed(
         "confirmed_rows": len(imported.get("confirmed", [])),
         "seeded": seeded.get("seeded", 0),
         "skipped_reviewed": seeded.get("skipped_reviewed", 0),
+        "already_confirmed_ids": seeded.get("skipped_reviewed_ids", []),
         "knowledge_status": seeded.get("knowledge_status"),
         "unmapped": unmapped,
         "taxonomy_version": taxonomy.version,

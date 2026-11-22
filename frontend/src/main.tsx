@@ -21,9 +21,10 @@ import "./style.css";
 import { AdoPanel } from "./AdoPanel";
 import { Admin } from "./Admin";
 import { Analysis } from "./Analysis";
+import { ConfirmedNotice } from "./ConfirmedNotice";
 import { Dashboard } from "./Dashboard";
 import { Ingestion } from "./Ingestion";
-import { api, type RcaView } from "./api";
+import { api, type Coded, RCA_STATUS_LABELS, type RcaStatus, type RcaView } from "./api";
 
 type Screen = "dashboard" | "import" | "defects" | "analysis" | "ingestion" | "admin";
 const SCREENS: Record<Screen, { label: string; title: string; description: string; icon: LucideIcon }> = {
@@ -48,7 +49,7 @@ const SCREENS: Record<Screen, { label: string; title: string; description: strin
   analysis: {
     label: "AI analysis",
     title: "AI analysis and review",
-    description: "Run AI analysis on closed defects, then approve or correct each proposed root cause.",
+    description: "Analyze the defects from an Excel import or Azure DevOps query, then approve, correct or reject each proposed root cause.",
     icon: BrainCircuit,
   },
   ingestion: {
@@ -79,9 +80,26 @@ type Defect = {
   description: string;
   repro_steps: string;
   tags: string[];
+  rca?: RcaSummary | null;
 };
+type RcaSummary = {
+  id: string;
+  status: RcaStatus;
+  review_source?: string | null;
+  root_cause: Coded;
+  sdlc_phase: Coded;
+  testing_gap: Coded;
+  confidence: number | null;
+};
+
+function rcaStatusText(rca: RcaSummary): string {
+  if (rca.review_source === "SEED_IMPORT" && rca.status === "APPROVED") return "Confirmed (ingested)";
+  return RCA_STATUS_LABELS[rca.status] ?? rca.status;
+}
 type ImportResult = {
+  import_batch_id?: string;
   upserted?: number;
+  already_confirmed_ids?: number[];
   preview?: { rows_total?: number; rows_valid?: number; row_errors?: unknown[] };
 };
 
@@ -104,6 +122,7 @@ function App() {
   const [file, setFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [analysisBatch, setAnalysisBatch] = useState<string | null>(null);
   const [defects, setDefects] = useState<Defect[]>([]);
   const [selectedDefect, setSelectedDefect] = useState<Defect | null>(null);
   const [moduleFilter, setModuleFilter] = useState("");
@@ -243,7 +262,7 @@ function App() {
       const response = await api<{ defect: Defect; rca: RcaView | null }>(
         `/api/v1/projects/${encodeURIComponent(projectId)}/defects/${adoId}`,
       );
-      setSelectedDefect(response.defect);
+      setSelectedDefect({ ...response.defect, rca: defects.find((item) => item.ado_id === adoId)?.rca ?? null });
       setSelectedRca(response.rca);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load defect");
@@ -452,8 +471,9 @@ function App() {
           ) : screen === "analysis" ? (
             <Analysis
               canAnalyze={canImport}
-              canReview={selectedProject?.role === "QA_LEAD"}
+              canReview={selectedProject?.role === "QA_LEAD" || selectedProject?.role === "ADMIN"}
               csrfToken={csrfToken}
+              initialBatchId={analysisBatch}
               projectId={projectId}
             />
           ) : screen === "import" ? (
@@ -519,6 +539,23 @@ function App() {
                           <span>New or updated</span>
                         </div>
                       </div>
+                      <ConfirmedNotice
+                        ids={result.already_confirmed_ids ?? []}
+                        message="They are already in the knowledge base and will not be analyzed again."
+                      />
+                      {result.import_batch_id && (result.upserted ?? 0) > 0 && (
+                        <button
+                          className="primary"
+                          onClick={() => {
+                            setAnalysisBatch(result.import_batch_id ?? null);
+                            setScreen("analysis");
+                          }}
+                          type="button"
+                        >
+                          <Sparkles aria-hidden="true" size={16} />
+                          Analyze these defects
+                        </button>
+                      )}
                       <details>
                         <summary>Full import report</summary>
                         <pre>{JSON.stringify(result, null, 2)}</pre>
@@ -530,7 +567,10 @@ function App() {
                   <AdoPanel
                     csrfToken={csrfToken}
                     isAdmin={selectedProject?.role === "ADMIN"}
-                    onOpenAnalysis={() => setScreen("analysis")}
+                    onOpenAnalysis={(batchId) => {
+                      setAnalysisBatch(batchId ?? null);
+                      setScreen("analysis");
+                    }}
                     projectId={projectId}
                   />
                 </div>
@@ -570,8 +610,12 @@ function App() {
                         <th>ID</th>
                         <th>Title</th>
                         <th>Module</th>
-                        <th>Release</th>
                         <th>State</th>
+                        <th>Root cause</th>
+                        <th>SDLC phase</th>
+                        <th>Testing gap</th>
+                        <th>Confidence</th>
+                        <th>RCA status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -584,15 +628,27 @@ function App() {
                           <td className="id-cell">#{defect.ado_id}</td>
                           <td>{defect.title}</td>
                           <td>{defect.module || "—"}</td>
-                          <td>{defect.release || "—"}</td>
                           <td>
                             <span className="state-pill">{defect.state || "Unknown"}</span>
+                          </td>
+                          <td>{defect.rca?.root_cause?.label ?? "—"}</td>
+                          <td>{defect.rca?.sdlc_phase?.label ?? "—"}</td>
+                          <td>{defect.rca?.testing_gap?.label ?? "—"}</td>
+                          <td className="num-cell">
+                            {typeof defect.rca?.confidence === "number" ? `${Math.round(defect.rca.confidence * 100)}%` : "—"}
+                          </td>
+                          <td>
+                            {defect.rca ? (
+                              <span className={`rca-pill ${defect.rca.status.toLowerCase()}`}>{rcaStatusText(defect.rca)}</span>
+                            ) : (
+                              <span className="muted">Not analyzed</span>
+                            )}
                           </td>
                         </tr>
                       ))}
                       {defects.length === 0 && (
                         <tr>
-                          <td className="empty-cell" colSpan={5}>
+                          <td className="empty-cell" colSpan={9}>
                             No defects yet. Import a file or pull from Azure DevOps on the Import page.
                           </td>
                         </tr>
@@ -616,6 +672,31 @@ function App() {
                         ×
                       </button>
                     </div>
+                    {selectedDefect.rca && (
+                      <div className="rca-summary">
+                        <span className={`rca-pill ${selectedDefect.rca.status.toLowerCase()}`}>
+                          {rcaStatusText(selectedDefect.rca)}
+                        </span>
+                        <dl>
+                          <dt>Root cause</dt>
+                          <dd>{selectedDefect.rca.root_cause?.label ?? "—"}</dd>
+                          <dt>SDLC phase</dt>
+                          <dd>{selectedDefect.rca.sdlc_phase?.label ?? "—"}</dd>
+                          <dt>Testing gap</dt>
+                          <dd>{selectedDefect.rca.testing_gap?.label ?? "—"}</dd>
+                          <dt>AI confidence</dt>
+                          <dd>
+                            {typeof selectedDefect.rca.confidence === "number"
+                              ? `${Math.round(selectedDefect.rca.confidence * 100)}%`
+                              : "—"}
+                          </dd>
+                        </dl>
+                      </div>
+                    )}
+                    <DetailField
+                      label="Module / release"
+                      value={`${selectedDefect.module || "—"} · ${selectedDefect.release || "—"}`}
+                    />
                     <DetailField label="Description" value={selectedDefect.description} />
                     <DetailField label="Reproduction steps" value={selectedDefect.repro_steps} />
                     <DetailField
@@ -623,18 +704,16 @@ function App() {
                       value={`${selectedDefect.severity || "—"} / ${selectedDefect.priority || "—"}`}
                     />
                     <DetailField label="Tags" value={(selectedDefect.tags ?? []).join(", ")} />
-                    <DetailField
-                      label="AI root cause"
-                      value={
-                        selectedRca?.proposed
-                          ? `${selectedRca.proposed.root_cause?.label ?? "—"} · ${Math.round(
-                              selectedRca.proposed.confidence * 100,
-                            )}% confidence (see AI analysis)`
-                          : selectedRca
-                            ? `Needs manual RCA (${selectedRca.failure_reason ?? "unknown"})`
-                            : "Not analyzed yet"
-                      }
-                    />
+                    {selectedRca?.proposed?.rationale && (
+                      <DetailField label="AI rationale" value={selectedRca.proposed.rationale} />
+                    )}
+                    {selectedRca && !selectedRca.proposed && (
+                      <DetailField
+                        label="AI root cause"
+                        value={`Needs manual RCA (${selectedRca.failure_reason ?? "unknown"})`}
+                      />
+                    )}
+                    {!selectedRca && <DetailField label="AI root cause" value="Not analyzed yet" />}
                   </aside>
                 )}
               </div>

@@ -38,6 +38,7 @@ from services.ai_knowledge_service.app.knowledge import (
 )
 from services.ai_knowledge_service.app.ops import collect_metrics
 from services.ai_knowledge_service.app.repository import (
+    REJECTED,
     REVIEWED_STATUSES,
     build_trend_fact,
     consume_llm_call,
@@ -71,7 +72,7 @@ class DefectText(BaseModel):
 
 
 class ReviewRequest(BaseModel):
-    decision: Literal["APPROVE", "CORRECT"]
+    decision: Literal["APPROVE", "CORRECT", "REJECT"]
     final: FinalClassification | None = None
     note: str | None = Field(default=None, max_length=2_000)
     reviewer_id: str = Field(min_length=1, max_length=64)
@@ -174,6 +175,9 @@ async def review_rca(
     if body.taxonomy.version != rca.get("taxonomy_version"):
         raise HTTPException(status_code=409, detail={"code": "TAXONOMY_VERSION_MISMATCH"})
 
+    if body.decision == "REJECT":
+        return await _reject(database, rca, object_id, body)
+
     proposed = rca.get("proposed") or {}
     proposed_codes = {name: proposed.get(name) for name in _CODE_FIELDS}
     if body.decision == "APPROVE":
@@ -250,6 +254,59 @@ async def review_rca(
     }
 
 
+async def _reject(
+    database: AsyncIOMotorDatabase[dict[str, Any]],
+    rca: dict[str, Any],
+    object_id: ObjectId,
+    body: ReviewRequest,
+) -> dict[str, Any]:
+    """Reject the AI proposal: nothing enters the knowledge base or trends.
+
+    A rejected RCA can later be corrected, re-opened, or re-analyzed by the AI.
+    """
+    if rca["status"] == REJECTED:
+        raise HTTPException(status_code=409, detail={"code": "ALREADY_REJECTED"})
+    now = datetime.now(UTC)
+    note = (body.note or "").strip() or None
+    result = await database["rca_analyses"].update_one(
+        {"_id": object_id, "status": rca["status"]},
+        {
+            "$set": {
+                "status": REJECTED,
+                "final": {"note": note} if note else None,
+                "reviewer_id": _reviewer(body.reviewer_id),
+                "reviewed_at": now,
+                "review_source": "REVIEW",
+                "updated_at": now,
+            }
+        },
+    )
+    if result.modified_count != 1:
+        raise HTTPException(status_code=409, detail={"code": "CONCURRENT_REVIEW"})
+    if rca["status"] in REVIEWED_STATUSES:
+        # Rejecting a previously confirmed RCA takes it back out of the knowledge base and trends.
+        await remove_knowledge_entry(database, rca["project_id"], str(object_id))
+        await _enqueue_trend(
+            database,
+            {
+                "project_id": rca["project_id"],
+                "remove": {"project_id": rca["project_id"], "defect_id": rca["defect_id"]},
+            },
+        )
+    return {
+        "id": str(object_id),
+        "project_id": rca["project_id"],
+        "defect_id": rca["defect_id"],
+        "status": REJECTED,
+        "previous_status": rca["status"],
+        "final": None,
+        "reviewed_at": now,
+        "trend_job_id": None,
+        "knowledge_entry_id": None,
+        "knowledge_status": None,
+    }
+
+
 @router.post("/internal/rcas/{rca_id}/reopen")
 async def reopen_rca(
     request: Request,
@@ -267,7 +324,7 @@ async def reopen_rca(
     rca = await database["rca_analyses"].find_one({"_id": object_id})
     if rca is None:
         raise HTTPException(status_code=404, detail={"code": "RCA_NOT_FOUND"})
-    if rca["status"] not in REVIEWED_STATUSES:
+    if rca["status"] not in REVIEWED_STATUSES and rca["status"] != REJECTED:
         raise HTTPException(status_code=409, detail={"code": "NOT_REVIEWED"})
     status = "AI_PROPOSED" if rca.get("proposed") else "NEEDS_MANUAL_RCA"
     now = datetime.now(UTC)
@@ -341,9 +398,15 @@ async def seed_knowledge(
     items = {item.defect.ado_id: item for item in body.items}
     latest = await latest_by_defect(database, project_id, list(items))
     to_seed = [item for ado_id, item in items.items() if latest.get(ado_id, {}).get("status") not in REVIEWED_STATUSES]
-    skipped = len(items) - len(to_seed)
+    skipped_ids = sorted(ado_id for ado_id in items if latest.get(ado_id, {}).get("status") in REVIEWED_STATUSES)
+    skipped = len(skipped_ids)
     if not to_seed:
-        return {"seeded": 0, "skipped_reviewed": skipped, "knowledge_status": None}
+        return {
+            "seeded": 0,
+            "skipped_reviewed": skipped,
+            "skipped_reviewed_ids": skipped_ids,
+            "knowledge_status": None,
+        }
 
     embedder = build_embedding_client(settings)
     texts = [
@@ -408,6 +471,7 @@ async def seed_knowledge(
     return {
         "seeded": len(to_seed),
         "skipped_reviewed": skipped,
+        "skipped_reviewed_ids": skipped_ids,
         "knowledge_status": ACTIVE if vectors else PENDING_EMBEDDING,
     }
 

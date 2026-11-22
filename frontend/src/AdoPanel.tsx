@@ -1,5 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { api, errorMessage } from "./api";
+import { ConfirmedNotice } from "./ConfirmedNotice";
 
 type Status = {
   organization: string | null;
@@ -18,6 +19,8 @@ type PullResult = {
   ado_ids: number[];
   comments: number;
   states: Record<string, number>;
+  import_batch_id?: string;
+  already_confirmed_ids?: number[];
 };
 
 type Mode = "query" | "ids" | "closed";
@@ -43,7 +46,7 @@ export function AdoPanel({
   projectId: string;
   csrfToken: string;
   isAdmin: boolean;
-  onOpenAnalysis: () => void;
+  onOpenAnalysis: (batchId?: string) => void;
 }) {
   const base = `/api/v1/projects/${encodeURIComponent(projectId)}`;
   const [status, setStatus] = useState<Status | null>(null);
@@ -127,17 +130,17 @@ export function AdoPanel({
         csrfToken,
       );
       setResult(pulled);
-      if (analyze && pulled.ado_ids.length > 0) {
+      if (analyze && pulled.ado_ids.length > 0 && pulled.import_batch_id) {
         try {
           const queued = await api<{ job_id: string | null; queued: number; skipped_reviewed: number }>(
             `${base}/analyses`,
-            { method: "POST", body: JSON.stringify({ ado_ids: pulled.ado_ids.slice(0, 200), reanalyze: true }) },
+            { method: "POST", body: JSON.stringify({ import_batch_id: pulled.import_batch_id, reanalyze: true }) },
             csrfToken,
           );
           setAnalysisNote(
             queued.job_id
-              ? `AI analysis queued for ${queued.queued} defect(s)${queued.skipped_reviewed ? ` (${queued.skipped_reviewed} already reviewed, kept)` : ""}.`
-              : "No defects needed analysis (all already reviewed).",
+              ? `AI analysis queued for ${queued.queued} defect(s).`
+              : "No defects needed analysis (all already have a confirmed RCA).",
           );
         } catch (err) {
           setAnalysisNote(`Imported, but analysis was not started: ${errorMessage(err, "error")}`);
@@ -287,12 +290,18 @@ export function AdoPanel({
               .map(([state, count]) => `${count} ${state}`)
               .join(", ") || "none found"}
             . {analysisNote}{" "}
-            {analysisNote.startsWith("AI analysis queued") && (
-              <button className="text-button" onClick={onOpenAnalysis} type="button">
-                Open AI analysis →
+            {result.import_batch_id && result.upserted > 0 && (
+              <button className="text-button" onClick={() => onOpenAnalysis(result.import_batch_id)} type="button">
+                {analysisNote.startsWith("AI analysis queued") ? "Open AI analysis →" : "Analyze these defects →"}
               </button>
             )}
           </div>
+        )}
+        {result && (
+          <ConfirmedNotice
+            ids={result.already_confirmed_ids ?? []}
+            message="They are already in the knowledge base and will not be analyzed again."
+          />
         )}
       </form>
     </>

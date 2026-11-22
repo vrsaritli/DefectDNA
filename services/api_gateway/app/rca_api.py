@@ -27,12 +27,35 @@ router = APIRouter(prefix="/api/v1")
 
 _READERS = {"VIEWER", "QA_LEAD", "ADMIN"}
 _ANALYSTS = {"QA_LEAD", "ADMIN"}
-_RCA_STATUSES = {"AI_PROPOSED", "NEEDS_MANUAL_RCA", "APPROVED", "CORRECTED"}
+_RCA_STATUSES = {"AI_PROPOSED", "NEEDS_MANUAL_RCA", "APPROVED", "CORRECTED", "REJECTED"}
 
 
 class AnalysisRequest(BaseModel):
     ado_ids: list[int] | None = Field(default=None, min_length=1, max_length=1_000)
+    import_batch_id: str | None = Field(default=None, max_length=64)
     reanalyze: bool = False
+
+
+async def _batch_ids(project_id: str, batch_id: str) -> tuple[list[int], str]:
+    """Defect IDs and label of one import (Excel upload or ADO pull)."""
+    _, batch = await core._call_ingestion(
+        "GET", f"/internal/projects/{project_id}/import-batches/{batch_id}"
+    )
+    return [int(item) for item in batch.get("ado_ids", [])], str(batch.get("label") or "")
+
+
+@router.get("/projects/{project_id}/import-batches")
+async def list_import_batches(
+    project_id: str,
+    current: CurrentUserDependency,
+    database: DatabaseDependency,
+) -> dict[str, Any]:
+    """Recent defect imports to analyze: Excel uploads and ADO pulls from the Import page."""
+    await core._require_project_role(project_id, current, database, _READERS)
+    _, result = await core._call_ingestion(
+        "GET", f"/internal/projects/{project_id}/import-batches", params={"limit": 25}
+    )
+    return result
 
 
 class ProjectSettingsRequest(BaseModel):
@@ -166,6 +189,12 @@ async def request_analysis(
         window_seconds=86_400,
     )
     limit = settings.max_analysis_batch
+    batch_label = None
+    if body.import_batch_id:
+        batch_ids, batch_label = await _batch_ids(project_id, body.import_batch_id)
+        if not batch_ids:
+            raise HTTPException(status_code=422, detail={"code": "IMPORT_HAS_NO_DEFECTS"})
+        body.ado_ids = batch_ids[:limit]
     if body.ado_ids is not None and len(set(body.ado_ids)) > limit:
         raise HTTPException(status_code=422, detail={"code": "BATCH_TOO_LARGE"})
 
@@ -212,6 +241,7 @@ async def request_analysis(
         },
     )
     result["remaining"] = max(0, total_matching - len(defects))
+    result["import_label"] = batch_label
     await write_audit(
         database,
         action="ANALYSIS_REQUESTED",
@@ -225,6 +255,7 @@ async def request_analysis(
             "skipped_already_analyzed": result.get("skipped_already_analyzed", 0),
             "taxonomy_version": taxonomy.version,
             "reanalyze": body.reanalyze,
+            "import_batch_id": body.import_batch_id,
         },
     )
     return result
@@ -238,14 +269,19 @@ async def list_rcas(
     status: str | None = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 50,
+    import_batch_id: Annotated[str | None, Query(max_length=64)] = None,
 ) -> dict[str, Any]:
     await core._require_project_role(project_id, current, database, _READERS)
     if status is not None and status not in _RCA_STATUSES:
         raise HTTPException(status_code=422, detail={"code": "INVALID_STATUS"})
+    params: dict[str, Any] = {"page": page, "page_size": page_size}
+    if status:
+        params["status"] = status
+    if import_batch_id:
+        ids, _ = await _batch_ids(project_id, import_batch_id)
+        params["defect_ids"] = ",".join(str(item) for item in ids[:2_000])
     _, result = await core._call_ai_knowledge(
-        "GET",
-        f"/internal/projects/{project_id}/rcas",
-        params={"page": page, "page_size": page_size, **({"status": status} if status else {})},
+        "GET", f"/internal/projects/{project_id}/rcas", params=params
     )
     cache: dict[int, Taxonomy | None] = {}
     rcas = [await enrich_rca(database, project_id, rca, cache) for rca in result.get("rcas", [])]
