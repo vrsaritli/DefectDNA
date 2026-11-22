@@ -385,6 +385,9 @@ Release approver (P5), monitoring tool (P6), data-handling approval for real def
 - **Defect register:** each row shows the latest RCA (root cause, SDLC phase, testing
   gap), the AI confidence, and the status (AI proposed, needs manual RCA, approved,
   corrected, rejected, or confirmed by ingestion).
+- **Demo slides:** the sidebar footer (next to *DefectDNA · v1.0*) links to
+  `frontend/public/DefectDNA-demo-slides.pdf`. The editable deck is
+  `docs/presentations/DefectDNA-leadership-demo.pptx` (PDF copy alongside).
 - New endpoint: `GET /api/v1/projects/{id}/import-batches`; `POST /analyses` and
   `GET /rcas` accept `import_batch_id`; `POST /rcas/{id}/review` accepts
   `decision: "REJECT"`.

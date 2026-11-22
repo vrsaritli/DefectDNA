@@ -704,6 +704,20 @@ select {
   font-size: 11px;
 }
 
+.build-tag a {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.build-tag a:hover {
+  color: #a8dcc6;
+  text-decoration: underline;
+}
+
 .main {
   display: flex;
   min-width: 0;

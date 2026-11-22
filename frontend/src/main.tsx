@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  Presentation,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -442,7 +443,13 @@ function App() {
               <LogOut aria-hidden="true" size={18} />
             </button>
           </div>
-          <p className="build-tag">DefectDNA · v1.0</p>
+          <p className="build-tag">
+            DefectDNA · v1.0 ·{" "}
+            <a href="/DefectDNA-demo-slides.pdf" rel="noopener" target="_blank" title="Open the demo slides (PDF)">
+              <Presentation aria-hidden="true" size={12} />
+              Demo slides
+            </a>
+          </p>
         </div>
       </aside>
 
