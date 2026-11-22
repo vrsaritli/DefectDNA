@@ -12,6 +12,7 @@ from libs.common.config import settings
 from services.api_gateway.app.auth.dependencies import get_database
 from services.api_gateway.app.auth.passwords import hash_password
 from services.api_gateway.app.auth.repository import ensure_auth_indexes
+from services.api_gateway.app import api as gateway_api
 from services.api_gateway.app.main import app
 
 
@@ -274,3 +275,78 @@ def test_rate_limit_applies_to_authenticated_user(
     limited = client.get("/api/v1/me")
     assert limited.status_code == 429
     assert limited.json()["error"]["code"] == "RATE_LIMITED"
+
+
+def test_ingestion_routes_enforce_project_roles_and_audit_uploads(
+    auth_client: tuple[TestClient, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, database = auth_client
+    _insert_user(
+        database,
+        "lead@example.test",
+        "Lead-Password-123!",
+        role="QA_LEAD",
+    )
+    login = _login(client, "lead@example.test", "Lead-Password-123!")
+    captured: dict[str, Any] = {}
+
+    async def fake_ingestion(
+        method: str,
+        path: str,
+        **kwargs: Any,
+    ) -> tuple[int, dict[str, Any]]:
+        captured.update({"method": method, "path": path, **kwargs})
+        return (
+            200,
+            {
+                "job_id": "job-id",
+                "import_batch_id": "batch-id",
+                "preview": {
+                    "rows_total": 1,
+                    "rows_valid": 1,
+                    "row_errors": [],
+                    "mapped": {"ID": "ado_id", "Title": "title"},
+                    "detected_columns": ["ID", "Title"],
+                    "rows": [],
+                },
+            },
+        )
+
+    monkeypatch.setattr(gateway_api, "_call_ingestion", fake_ingestion)
+    upload = client.post(
+        "/api/v1/projects/project-a/imports",
+        headers={"X-CSRF-Token": login["csrf_token"]},
+        files={"file": ("defects.csv", b"ID,Title\n1,Defect\n", "text/csv")},
+    )
+
+    assert upload.status_code == 202
+    assert upload.json()["job_id"] == "job-id"
+    assert captured["headers"]["X-Project-ID"] == "project-a"
+    assert asyncio.run(
+        database["audit_log"].count_documents({"action": "DEFECTS_IMPORTED"})
+    ) == 1
+
+    forbidden = client.post(
+        "/api/v1/projects/project-b/imports",
+        headers={"X-CSRF-Token": login["csrf_token"]},
+        files={"file": ("defects.csv", b"ID,Title\n1,Defect\n", "text/csv")},
+    )
+    assert forbidden.status_code == 403
+
+    _insert_user(
+        database,
+        "viewer@example.test",
+        "Viewer-Password-123!",
+        role="VIEWER",
+    )
+    client.cookies.clear()
+    viewer_login = _login(client, "viewer@example.test", "Viewer-Password-123!")
+    readable = client.get("/api/v1/projects/project-a/defects")
+    denied_upload = client.post(
+        "/api/v1/projects/project-a/imports",
+        headers={"X-CSRF-Token": viewer_login["csrf_token"]},
+        files={"file": ("defects.csv", b"ID,Title\n1,Defect\n", "text/csv")},
+    )
+    assert readable.status_code == 200
+    assert denied_upload.status_code == 403

@@ -1,17 +1,19 @@
 import asyncio
 import re
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from enum import Enum
-from typing import Any
+from typing import Annotated, Any
 
+import httpx
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field, SecretStr, field_validator
 from pymongo.errors import DuplicateKeyError
 
 from libs.common.config import settings
+from libs.common.service_auth import create_service_token
 from services.api_gateway.app.auth.audit import write_audit
 from services.api_gateway.app.auth.dependencies import (
     AdminDependency,
@@ -147,6 +149,69 @@ def _object_id(value: str) -> ObjectId:
         return ObjectId(value)
     except InvalidId as exc:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND"}) from exc
+
+
+async def _require_project_role(
+    project_id: str,
+    current: dict[str, Any],
+    database: Any,
+    allowed_roles: set[str],
+) -> None:
+    role = await database["user_project_roles"].find_one(
+        {"user_id": current["user"]["_id"], "project_id": project_id}
+    )
+    if role is None or role["role"] not in allowed_roles:
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN"})
+
+
+async def _call_ingestion(
+    method: str,
+    path: str,
+    *,
+    headers: dict[str, str],
+    params: dict[str, Any] | None = None,
+    files: dict[str, tuple[str, bytes, str]] | None = None,
+    data: dict[str, str] | None = None,
+) -> tuple[int, dict[str, Any]]:
+    if len(settings.service_token_secret.encode("utf-8")) < 32:
+        raise HTTPException(status_code=503, detail={"code": "SERVICE_AUTH_NOT_CONFIGURED"})
+    service_headers = {
+        **headers,
+        "Authorization": f"Bearer {create_service_token(settings.service_token_secret, 'api-gateway')}",
+    }
+    try:
+        async with httpx.AsyncClient(
+            base_url=settings.ingestion_service_url.rstrip("/"),
+            timeout=httpx.Timeout(30.0),
+        ) as client:
+            response = await client.request(
+                method,
+                path,
+                headers=service_headers,
+                params=params,
+                files=files,
+                data=data,
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=503, detail={"code": "INGESTION_UNAVAILABLE"}) from exc
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail={"code": "INVALID_INGESTION_RESPONSE"}) from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=502, detail={"code": "INVALID_INGESTION_RESPONSE"})
+    if response.is_error:
+        detail = payload.get("detail", {})
+        detail = detail if isinstance(detail, dict) else {}
+        raise HTTPException(
+            status_code=response.status_code,
+            detail={
+                "code": detail.get("code", "INGESTION_REQUEST_FAILED"),
+                **({"message": detail["message"]} if "message" in detail else {}),
+            },
+        )
+    return response.status_code, payload
 
 
 @router.post("/auth/login")
@@ -485,3 +550,151 @@ async def reset_password(
         entity_id=target_id,
     )
     return {"user_id": user_id, "temporary_password": temporary_password}
+
+
+@router.post("/projects/{project_id}/imports", status_code=202)
+async def upload_defects(
+    project_id: str,
+    current: CurrentUserDependency,
+    database: DatabaseDependency,
+    file: UploadFile = File(...),
+    mapping: str | None = Form(default=None),
+) -> dict[str, Any]:
+    await _require_project_role(project_id, current, database, {"QA_LEAD", "ADMIN"})
+    content = await file.read(settings.max_import_file_bytes + 1)
+    if len(content) > settings.max_import_file_bytes:
+        raise HTTPException(status_code=413, detail={"code": "FILE_TOO_LARGE"})
+    _, result = await _call_ingestion(
+        "POST",
+        "/internal/imports",
+        headers={
+            "X-Project-ID": project_id,
+            "X-User-ID": str(current["user"]["_id"]),
+        },
+        files={
+            "file": (
+                file.filename or "",
+                content,
+                file.content_type or "application/octet-stream",
+            )
+        },
+        data={"mapping": mapping} if mapping is not None else None,
+    )
+    preview = result.get("preview", {})
+    await write_audit(
+        database,
+        action="DEFECTS_IMPORTED",
+        actor_user_id=current["user"]["_id"],
+        project_id=project_id,
+        entity="import_batches",
+        entity_id=result.get("import_batch_id"),
+        detail={
+            "source": "CSV_IMPORT",
+            "rows_total": preview.get("rows_total", 0),
+            "rows_valid": preview.get("rows_valid", 0),
+            "row_errors": len(preview.get("row_errors", [])),
+        },
+    )
+    return result
+
+
+@router.post("/projects/{project_id}/ado-sync", status_code=202)
+async def sync_ado_defects(
+    project_id: str,
+    start_date: date,
+    end_date: date,
+    current: CurrentUserDependency,
+    database: DatabaseDependency,
+) -> dict[str, Any]:
+    await _require_project_role(project_id, current, database, {"QA_LEAD", "ADMIN"})
+    _, result = await _call_ingestion(
+        "POST",
+        "/internal/ado-sync",
+        headers={
+            "X-Project-ID": project_id,
+            "X-User-ID": str(current["user"]["_id"]),
+        },
+        params={"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
+    )
+    await write_audit(
+        database,
+        action="ADO_DEFECTS_SYNCED",
+        actor_user_id=current["user"]["_id"],
+        project_id=project_id,
+        entity="import_batches",
+        entity_id=result.get("import_batch_id"),
+        detail={"rows_total": result.get("rows_total", 0)},
+    )
+    return result
+
+
+@router.get("/jobs/{job_id}")
+async def get_job(
+    job_id: str,
+    current: CurrentUserDependency,
+    database: DatabaseDependency,
+) -> dict[str, Any]:
+    job_object_id = _object_id(job_id)
+    job = await database["jobs"].find_one({"_id": job_object_id})
+    if job is None:
+        raise HTTPException(status_code=404, detail={"code": "JOB_NOT_FOUND"})
+    project_id = job.get("payload", {}).get("project_id")
+    if not isinstance(project_id, str):
+        raise HTTPException(status_code=404, detail={"code": "JOB_NOT_FOUND"})
+    await _require_project_role(
+        project_id, current, database, {"VIEWER", "QA_LEAD", "ADMIN"}
+    )
+    return {
+        "job_id": str(job["_id"]),
+        "type": job["type"],
+        "status": job["status"],
+        "progress": job.get("payload", {}).get("progress", {}),
+        "errors": job.get("payload", {}).get("errors", []),
+    }
+
+
+@router.get("/projects/{project_id}/defects")
+async def list_project_defects(
+    project_id: str,
+    current: CurrentUserDependency,
+    database: DatabaseDependency,
+    module: str | None = None,
+    release: str | None = None,
+    state: str | None = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> dict[str, Any]:
+    await _require_project_role(
+        project_id, current, database, {"VIEWER", "QA_LEAD", "ADMIN"}
+    )
+    _, result = await _call_ingestion(
+        "GET",
+        f"/internal/projects/{project_id}/defects",
+        headers={},
+        params={
+            "page": page,
+            "page_size": page_size,
+            **({"module": module} if module else {}),
+            **({"release": release} if release else {}),
+            **({"state": state} if state else {}),
+        },
+    )
+    return result
+
+
+@router.get("/projects/{project_id}/defects/{ado_id}")
+async def get_project_defect(
+    project_id: str,
+    ado_id: int,
+    current: CurrentUserDependency,
+    database: DatabaseDependency,
+) -> dict[str, Any]:
+    await _require_project_role(
+        project_id, current, database, {"VIEWER", "QA_LEAD", "ADMIN"}
+    )
+    _, result = await _call_ingestion(
+        "GET",
+        f"/internal/projects/{project_id}/defects/{ado_id}",
+        headers={},
+    )
+    return result
