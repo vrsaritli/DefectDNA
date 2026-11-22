@@ -100,7 +100,7 @@ def _parse_date(value: Any) -> datetime | None:
         return datetime.combine(value, datetime.min.time())
     text = str(value).strip()
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return datetime.fromisoformat(text)
     except ValueError:
         for date_format in _DATE_FORMATS:
             try:

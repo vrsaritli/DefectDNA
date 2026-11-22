@@ -1,8 +1,9 @@
-import json
 import asyncio
+import json
 import re
+from collections import Counter
 from datetime import UTC, date, datetime
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, Literal, cast
 
 import httpx
 from bson import ObjectId
@@ -13,7 +14,13 @@ from pydantic import BaseModel, Field
 
 from libs.common.config import settings
 from libs.common.service_auth import verify_service_token
-from services.ingestion_service.app.ado import AdoDefectSource
+from services.ingestion_service.app.ado import (
+    AdoDefectSource,
+    AdoInputError,
+    organization_url,
+    parse_work_item_ids,
+    query_id_from_link,
+)
 from services.ingestion_service.app.parsing import extract_confirmed_labels, parse_defect_file
 
 router = APIRouter()
@@ -417,4 +424,176 @@ async def seed_import(
         "confirmed": [
             {"defect": defect, "labels": labels[defect["ado_id"]]} for defect in defects
         ],
+    }
+
+@router.delete("/internal/projects/{project_id}/data")
+async def delete_project_data(
+    request: Request,
+    project_id: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Delete everything this service holds for a project (idempotent)."""
+    _require_gateway(authorization)
+    _validate_project_id(project_id)
+    database = _database(request)
+    defects = await database["defects"].delete_many({"project_id": project_id})
+    batches = await database["import_batches"].delete_many({"project_id": project_id})
+    jobs = await database["jobs"].delete_many(
+        {"payload.project_id": project_id, "type": {"$in": ["import_defects", "ado_sync"]}}
+    )
+    return {
+        "service": "ingestion-service",
+        "deleted": {
+            "defects": defects.deleted_count,
+            "import_batches": batches.deleted_count,
+            "jobs": jobs.deleted_count,
+        },
+    }
+
+class AdoTarget(BaseModel):
+    organization: str | None = Field(default=None, max_length=300)
+    project: str | None = Field(default=None, max_length=200)
+
+
+class AdoPullRequest(AdoTarget):
+    mode: Literal["query", "ids", "closed"]
+    query_link: str | None = Field(default=None, max_length=2_000)
+    work_item_ids: str | None = Field(default=None, max_length=50_000)
+    start_date: date | None = None
+    end_date: date | None = None
+    include_comments: bool = True
+
+
+def _ado_source(target: AdoTarget) -> AdoDefectSource:
+    """Source for the requested (or default) organization/project, always with the server PAT."""
+    if not settings.ado_pat:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "ADO_NOT_CONFIGURED", "message": "ADO_PAT is not set on the server"},
+        )
+    organization = target.organization or settings.ado_organization_url
+    project = (target.project or settings.ado_project).strip()
+    if not organization or not project:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "ADO_TARGET_REQUIRED", "message": "Organization and project are required"},
+        )
+    try:
+        return AdoDefectSource(organization_url(organization), project, settings.ado_pat)
+    except AdoInputError as exc:
+        raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)}) from exc
+
+
+def _ado_http_error(exc: httpx.HTTPError) -> HTTPException:
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        code, message = {
+            401: ("ADO_AUTH_FAILED", "The PAT was rejected (expired, revoked or wrong organization)"),
+            403: ("ADO_FORBIDDEN", "The PAT has no read access to this project or query"),
+            404: ("ADO_NOT_FOUND", "Organization, project or query not found"),
+        }.get(status, ("ADO_REQUEST_FAILED", f"Azure DevOps returned HTTP {status}"))
+        return HTTPException(status_code=502, detail={"code": code, "message": message})
+    return HTTPException(
+        status_code=502, detail={"code": "ADO_UNAVAILABLE", "message": "Azure DevOps is unreachable"}
+    )
+
+
+@router.post("/internal/ado/status")
+async def ado_status(
+    body: AdoTarget,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Connection check with the server PAT; never returns the PAT."""
+    _require_gateway(authorization)
+    organization = body.organization or settings.ado_organization_url
+    project = body.project or settings.ado_project
+    result: dict[str, Any] = {
+        "organization": organization,
+        "project": project,
+        "pat_configured": bool(settings.ado_pat),
+        "connected": False,
+    }
+    try:
+        source = _ado_source(body)
+    except HTTPException as exc:
+        setup: dict[str, Any] = exc.detail if isinstance(exc.detail, dict) else {}
+        return {**result, "error": setup.get("code"), "message": setup.get("message")}
+    try:
+        info = await source.check_connection()
+        result.update(
+            connected=True, organization=source.organization_url, project=info["project_name"]
+        )
+    except httpx.HTTPError as exc:
+        failure: dict[str, Any] = cast(dict[str, Any], _ado_http_error(exc).detail)
+        result.update(error=failure["code"], message=failure["message"])
+    finally:
+        await source.close()
+    return result
+
+
+@router.post("/internal/ado-pull")
+async def ado_pull(
+    request: Request,
+    body: AdoPullRequest,
+    project_id: Annotated[str, Header(alias="X-Project-ID")],
+    user_id: Annotated[str, Header(alias="X-User-ID")],
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Pull defects from a saved query link, a list of work item IDs, or closed-by-date."""
+    _require_gateway(authorization)
+    _validate_project_id(project_id)
+    source = _ado_source(body)
+    try:
+        if body.mode == "query":
+            defects = await source.fetch_saved_query(
+                query_id_from_link(body.query_link or ""), include_comments=body.include_comments
+            )
+        elif body.mode == "ids":
+            defects = await source.fetch_by_ids(
+                parse_work_item_ids(body.work_item_ids or ""),
+                include_comments=body.include_comments,
+            )
+        else:
+            if body.start_date is None or body.end_date is None or body.start_date > body.end_date:
+                raise HTTPException(status_code=422, detail={"code": "INVALID_DATE_RANGE"})
+            defects = await source.fetch_closed_defects(
+                body.start_date, body.end_date, include_comments=body.include_comments
+            )
+    except AdoInputError as exc:
+        raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)}) from exc
+    except httpx.HTTPError as exc:
+        raise _ado_http_error(exc) from exc
+    finally:
+        await source.close()
+
+    database = _database(request)
+    batch_id = await _create_batch(
+        database,
+        project_id=project_id,
+        source="ADO_API",
+        filename=None,
+        row_count=len(defects),
+        defects=defects,
+        errors=[],
+        user_id=_validate_user_id(user_id),
+    )
+    upserted = await _upsert_defects(database, project_id, batch_id, defects)
+    job_id = await _create_completed_job(
+        database,
+        project_id=project_id,
+        job_type="ado_sync",
+        batch_id=batch_id,
+        total=len(defects),
+        succeeded=len(defects),
+        errors=[],
+    )
+    return {
+        "job_id": str(job_id),
+        "import_batch_id": str(batch_id),
+        "mode": body.mode,
+        "rows_total": len(defects),
+        "upserted": upserted,
+        "ado_ids": [defect["ado_id"] for defect in defects],
+        "comments": sum(len(d["comments"]) for d in defects if isinstance(d.get("comments"), list)),
+        "states": dict(Counter(str(defect.get("state") or "Unknown") for defect in defects)),
     }

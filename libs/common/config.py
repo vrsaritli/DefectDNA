@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     login_max_failures: int = Field(default=5, ge=1, le=100)
     login_lockout_minutes: int = Field(default=15, ge=1, le=1_440)
     rate_limit_requests_per_minute: int = Field(default=120, ge=1, le=10_000)
+    # Spend/abuse quotas (Architecture §19): file uploads per user, analysis jobs per project.
+    upload_quota_per_hour: int = Field(default=20, ge=1, le=10_000)
+    analysis_jobs_per_project_per_day: int = Field(default=50, ge=1, le=10_000)
     env: str = "dev"
     ai_knowledge_service_url: str = "http://127.0.0.1:8002"
     trends_service_url: str = "http://127.0.0.1:8003"

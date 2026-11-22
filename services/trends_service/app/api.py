@@ -152,3 +152,16 @@ async def replace_trend_facts(
         raise HTTPException(status_code=422, detail={"code": "PROJECT_MISMATCH"})
     count = await repository.replace_project_facts(_database(request), project_id, body.facts)
     return {"project_id": project_id, "facts": count}
+
+
+@router.delete("/internal/projects/{project_id}/data")
+async def delete_project_data(
+    request: Request,
+    project_id: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Delete everything this service holds for a project (idempotent)."""
+    _require_gateway(authorization)
+    _validate_project_id(project_id)
+    facts = await _database(request)["trend_facts"].delete_many({"project_id": project_id})
+    return {"service": "trends-service", "deleted": {"trend_facts": facts.deleted_count}}

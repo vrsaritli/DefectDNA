@@ -8,6 +8,11 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from libs.common.config import Settings
 from libs.common.database import create_mongo_client, ping_database
 from libs.common.logging import configure_logging
+from libs.common.observability import (
+    docs_urls,
+    enforce_production_settings,
+    install_request_context,
+)
 from services.ai_knowledge_service.app.api import router as aik_router
 from services.ai_knowledge_service.app.knowledge_api import router as knowledge_router
 
@@ -19,6 +24,7 @@ mongo_client: AsyncIOMotorClient[dict[str, Any]] | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global mongo_client
+    enforce_production_settings(settings)
     if settings.mongodb_uri:
         mongo_client = create_mongo_client(settings.mongodb_uri)
     app.state.mongo_client = mongo_client
@@ -29,7 +35,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.mongo_client = None
 
 
-app = FastAPI(title="DefectDNA AI Knowledge Service", lifespan=lifespan)
+app = FastAPI(title="DefectDNA AI Knowledge Service", lifespan=lifespan, **docs_urls(settings))
+install_request_context(app)
 app.include_router(aik_router)
 app.include_router(knowledge_router)
 

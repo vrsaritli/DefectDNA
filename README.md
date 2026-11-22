@@ -304,3 +304,51 @@ python -m services.ai_knowledge_service.evals.run_golden_set --rag    # needs CO
 
 `--rag` grounds each golden case on the *other* golden cases' confirmed labels
 (leave-one-out), never on its own label.
+## Phase 7 — Hardening and release
+
+Everything runs on your own machine or server: no containers and no cloud CI/CD.
+
+- **Delete project data** (Admin tab, or `DELETE /api/v1/projects/{id}/data` with
+  `{"confirm_project_id": "<id>"}`): a tracked job removes the project's defects, RCAs,
+  knowledge entries, trends and jobs from every service; users, roles, taxonomy and the
+  audit log are kept. Idempotent and audited.
+- **Operations** (Admin tab, `GET /api/v1/projects/{id}/ops`): failed and stuck jobs,
+  provider errors and LLM latency, NEEDS_MANUAL share, AI agreement, LLM/embedding usage
+  against daily caps, pending embeddings, sign-in failures and lockouts, with alerts.
+  `python ops/check_alerts.py` prints the same alerts as JSON and exits 0/1/2, so Windows
+  Task Scheduler (or cron) can run it every 15 minutes.
+- **Hardening:** correlation ID on every request (accepted or generated, returned in
+  `X-Correlation-ID`, logged by every service, forwarded internally); with `ENV=prod` the
+  services refuse weak or placeholder secrets and insecure cookies, and Swagger/OpenAPI is
+  off; upload and analysis quotas (`UPLOAD_QUOTA_PER_HOUR`,
+  `ANALYSIS_JOBS_PER_PROJECT_PER_DAY`); lint clean.
+- **Local release tooling** (`scripts/`):
+
+```powershell
+.\scripts\migrate.ps1          # migrations 001-006 against MONGODB_URI
+.\scripts\start.ps1            # 4 services + 2 workers + frontend -> http://127.0.0.1:5173
+.\scripts\stop.ps1
+.\scripts\check.ps1            # ruff, mypy, pytest, pip-audit, npm audit, build, Playwright E2E
+```
+
+- **Releases** are git tags (`release-YYYYMMDD`); rolling back means stopping, checking
+  out the previous tag and starting again. See
+  [deploy and roll back](docs/runbooks/deploy-and-rollback.md).
+- **Docs:** [runbooks](docs/runbooks/README.md),
+  [OWASP API checklist](docs/security/owasp-api-checklist.md),
+  [release readiness](docs/release-readiness.md), restore drill
+  `python ops/backup_restore_check.py`.
+
+### E2E tests
+
+```powershell
+cd frontend
+npx playwright install chromium   # once
+npm run e2e
+```
+
+### Still owner decisions
+
+Release approver (P5), monitoring tool (P6), data-handling approval for real defect text
+(P1), confirmed golden-set labels (P7), retention (P9), MFA (P10). See
+[release readiness](docs/release-readiness.md).

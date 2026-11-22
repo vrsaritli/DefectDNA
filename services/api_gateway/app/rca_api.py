@@ -15,6 +15,7 @@ from services.api_gateway.app.auth.dependencies import (
     CurrentUserDependency,
     DatabaseDependency,
 )
+from services.api_gateway.app.auth.rate_limit import enforce_quota
 from services.api_gateway.app.taxonomy import (
     TaxonomyConflict,
     enrich_rca,
@@ -158,6 +159,12 @@ async def request_analysis(
                 "message": "AI analysis is disabled for this project until an Admin enables it",
             },
         )
+    await enforce_quota(
+        database,
+        scope=f"analysis:{project_id}",
+        limit=settings.analysis_jobs_per_project_per_day,
+        window_seconds=86_400,
+    )
     limit = settings.max_analysis_batch
     if body.ado_ids is not None and len(set(body.ado_ids)) > limit:
         raise HTTPException(status_code=422, detail={"code": "BATCH_TOO_LARGE"})

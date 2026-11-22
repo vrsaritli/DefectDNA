@@ -14,6 +14,7 @@ from services.api_gateway.app.auth.dependencies import (
     CurrentUserDependency,
     DatabaseDependency,
 )
+from services.api_gateway.app.auth.rate_limit import enforce_quota
 from services.api_gateway.app.taxonomy import get_current_taxonomy
 
 router = APIRouter(prefix="/api/v1")
@@ -73,6 +74,12 @@ async def seed_knowledge(
     """Seed import: defects with QA-confirmed RCA columns go straight into the knowledge base."""
     # Seeds become APPROVED RCAs, so they follow the approval rule (§8): QA Lead only.
     await core._require_project_role(project_id, current, database, {"QA_LEAD"})
+    await enforce_quota(
+        database,
+        scope=f"upload:{current['user']['_id']}",
+        limit=settings.upload_quota_per_hour,
+        window_seconds=3600,
+    )
     content = await file.read(settings.max_import_file_bytes + 1)
     if len(content) > settings.max_import_file_bytes:
         raise HTTPException(status_code=413, detail={"code": "FILE_TOO_LARGE"})

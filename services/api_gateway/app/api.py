@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, SecretStr, field_validator
 from pymongo.errors import DuplicateKeyError
 
 from libs.common.config import settings
+from libs.common.observability import CORRELATION_HEADER, current_correlation_id
 from libs.common.service_auth import create_service_token
 from services.api_gateway.app.auth.audit import write_audit
 from services.api_gateway.app.auth.dependencies import (
@@ -29,6 +30,7 @@ from services.api_gateway.app.auth.passwords import (
     verify_password,
 )
 from services.api_gateway.app.auth.provider import AccountLocked, AuthProvider, LocalAuthProvider
+from services.api_gateway.app.auth.rate_limit import enforce_quota
 from services.api_gateway.app.auth.tokens import (
     create_session_token,
     hash_csrf_token,
@@ -183,6 +185,9 @@ async def _call_internal_service(
         **(headers or {}),
         "Authorization": f"Bearer {create_service_token(settings.service_token_secret, 'api-gateway')}",
     }
+    correlation_id = current_correlation_id()
+    if correlation_id:
+        service_headers[CORRELATION_HEADER] = correlation_id
     try:
         async with httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
@@ -619,10 +624,16 @@ async def upload_defects(
     project_id: str,
     current: CurrentUserDependency,
     database: DatabaseDependency,
-    file: UploadFile = File(...),
-    mapping: str | None = Form(default=None),
+    file: Annotated[UploadFile, File()],
+    mapping: Annotated[str | None, Form()] = None,
 ) -> dict[str, Any]:
     await _require_project_role(project_id, current, database, {"QA_LEAD", "ADMIN"})
+    await enforce_quota(
+        database,
+        scope=f"upload:{current['user']['_id']}",
+        limit=settings.upload_quota_per_hour,
+        window_seconds=3600,
+    )
     content = await file.read(settings.max_import_file_bytes + 1)
     if len(content) > settings.max_import_file_bytes:
         raise HTTPException(status_code=413, detail={"code": "FILE_TOO_LARGE"})
@@ -669,6 +680,12 @@ async def sync_ado_defects(
     database: DatabaseDependency,
 ) -> dict[str, Any]:
     await _require_project_role(project_id, current, database, {"QA_LEAD", "ADMIN"})
+    await enforce_quota(
+        database,
+        scope=f"upload:{current['user']['_id']}",
+        limit=settings.upload_quota_per_hour,
+        window_seconds=3600,
+    )
     _, result = await _call_ingestion(
         "POST",
         "/internal/ado-sync",

@@ -36,6 +36,7 @@ from services.ai_knowledge_service.app.knowledge import (
     upsert_knowledge_entry,
     vector_search,
 )
+from services.ai_knowledge_service.app.ops import collect_metrics
 from services.ai_knowledge_service.app.repository import (
     REVIEWED_STATUSES,
     build_trend_fact,
@@ -492,3 +493,51 @@ async def request_reembed(
         },
     )
     return {"job_id": job_id}
+
+
+@router.delete("/internal/projects/{project_id}/data")
+async def delete_project_data(
+    request: Request,
+    project_id: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Delete everything this service holds for a project (idempotent).
+
+    Queued analysis jobs go first: their payloads carry defect text.
+    """
+    _require_gateway(authorization)
+    _validate_project_id(project_id)
+    database = _database(request)
+    jobs = await database["jobs"].delete_many(
+        {
+            "payload.project_id": project_id,
+            "type": {"$in": ["analyze_defects", REEMBED_JOB, TREND_FACT_JOB]},
+        }
+    )
+    rcas = await database["rca_analyses"].delete_many({"project_id": project_id})
+    entries = await database["knowledge_entries"].delete_many({"project_id": project_id})
+    usage = await database["llm_usage"].delete_many(
+        {"project_id": {"$in": [project_id, f"embed:{project_id}"]}}
+    )
+    return {
+        "service": "ai-knowledge-service",
+        "deleted": {
+            "jobs": jobs.deleted_count,
+            "rca_analyses": rcas.deleted_count,
+            "knowledge_entries": entries.deleted_count,
+            "llm_usage": usage.deleted_count,
+        },
+    }
+
+@router.get("/internal/projects/{project_id}/ops/metrics")
+async def ops_metrics(
+    request: Request,
+    project_id: str,
+    hours: int = 24,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    _require_gateway(authorization)
+    _validate_project_id(project_id)
+    if not 1 <= hours <= 24 * 30:
+        raise HTTPException(status_code=422, detail={"code": "INVALID_WINDOW"})
+    return await collect_metrics(_database(request), project_id, settings, hours)

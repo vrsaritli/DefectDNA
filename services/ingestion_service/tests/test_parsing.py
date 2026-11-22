@@ -9,11 +9,11 @@ from services.ingestion_service.app.parsing import parse_defect_file
 
 def test_csv_parsing_maps_fields_and_reports_bad_rows() -> None:
     content = (
-        "ID,Title,Area Path,Iteration Path,Closed Date,Tags\n"
-        "48213,Checkout total,Checkout,R2026.3,2026-09-10,\"regression;billing\"\n"
-        "not-an-id,Missing id,Checkout,R2026.3,2026-09-10,\n"
-        "48215,,Checkout,R2026.3,not-a-date,\n"
-    ).encode()
+        b"ID,Title,Area Path,Iteration Path,Closed Date,Tags\n"
+        b"48213,Checkout total,Checkout,R2026.3,2026-09-10,\"regression;billing\"\n"
+        b"not-an-id,Missing id,Checkout,R2026.3,2026-09-10,\n"
+        b"48215,,Checkout,R2026.3,not-a-date,\n"
+    )
 
     result = parse_defect_file("defects.csv", content)
 

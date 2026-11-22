@@ -112,6 +112,7 @@ async def save_analysis(
                     "prompt_tokens_estimate": outcome.prompt_tokens_estimate,
                     "max_completion_tokens": outcome.max_completion_tokens,
                     "usage": outcome.usage,
+                    "latency_ms": outcome.latency_ms,
                 },
                 "scrub_counts": outcome.scrub_counts,
                 "job_id": ObjectId(job_id) if job_id and ObjectId.is_valid(job_id) else None,

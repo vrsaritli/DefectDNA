@@ -1,12 +1,14 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import { AdoPanel } from "./AdoPanel";
+import { Admin } from "./Admin";
 import { Analysis } from "./Analysis";
 import { Dashboard } from "./Dashboard";
 import { SeedImport } from "./SeedImport";
 import { api, type RcaView } from "./api";
 
-type Screen = "dashboard" | "import" | "defects" | "analysis";
+type Screen = "dashboard" | "import" | "defects" | "analysis" | "admin";
 const SCREENS: Record<Screen, { eyebrow: string; title: string; description: string }> = {
   dashboard: {
     eyebrow: "QUALITY INSIGHTS",
@@ -22,6 +24,11 @@ const SCREENS: Record<Screen, { eyebrow: string; title: string; description: str
     eyebrow: "DEFECT OPERATIONS",
     title: "Defect register",
     description: "Browse imported defects and inspect their source details.",
+  },
+  admin: {
+    eyebrow: "ADMINISTRATION",
+    title: "Operations",
+    description: "Pipeline health, alerts and project data management.",
   },
   analysis: {
     eyebrow: "AI ROOT-CAUSE ANALYSIS",
@@ -60,8 +67,6 @@ function App() {
   const [selectedDefect, setSelectedDefect] = useState<Defect | null>(null);
   const [moduleFilter, setModuleFilter] = useState("");
   const [releaseFilter, setReleaseFilter] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -156,27 +161,6 @@ function App() {
       setMessage("Import finished. Review the preview and row-level errors below.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Import failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function syncAdo(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!projectId) return;
-    setBusy(true);
-    setMessage("");
-    const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
-    try {
-      const response = await api<Record<string, unknown>>(
-        `/api/v1/projects/${encodeURIComponent(projectId)}/ado-sync?${params.toString()}`,
-        { method: "POST" },
-        csrfToken,
-      );
-      setResult(response);
-      setMessage("ADO sync finished. Review the sync result below.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "ADO sync failed");
     } finally {
       setBusy(false);
     }
@@ -349,11 +333,23 @@ function App() {
         >
           AI analysis
         </button>
+        {selectedProject?.role === "ADMIN" && (
+          <button
+            aria-current={screen === "admin" ? "page" : undefined}
+            className={screen === "admin" ? "tab active" : "tab"}
+            onClick={() => setScreen("admin")}
+            type="button"
+          >
+            Admin
+          </button>
+        )}
       </nav>
 
       {message && <p className="notice">{message}</p>}
 
-      {screen === "dashboard" ? (
+      {screen === "admin" ? (
+        <Admin csrfToken={csrfToken} projectId={projectId} />
+      ) : screen === "dashboard" ? (
         <Dashboard canRebuild={canImport} csrfToken={csrfToken} projectId={projectId} />
       ) : screen === "analysis" ? (
         <Analysis
@@ -400,36 +396,12 @@ function App() {
               {busy ? "Importing..." : "Upload and import"}
             </button>
           </form>
-              <div className="sync-panel">
-                <div>
-                  <p className="eyebrow">AZURE DEVOPS</p>
-                  <h2>Sync closed defects</h2>
-                  <p className="muted">Read-only sync for the configured ADO project and date range.</p>
-                </div>
-                <form className="filter-bar" onSubmit={syncAdo}>
-                  <label>
-                    Closed from
-                    <input
-                      onChange={(event) => setStartDate(event.target.value)}
-                      required
-                      type="date"
-                      value={startDate}
-                    />
-                  </label>
-                  <label>
-                    Closed through
-                    <input
-                      onChange={(event) => setEndDate(event.target.value)}
-                      required
-                      type="date"
-                      value={endDate}
-                    />
-                  </label>
-                  <button className="secondary" disabled={busy || !projectId} type="submit">
-                    {busy ? "Syncing..." : "Sync ADO"}
-                  </button>
-                </form>
-              </div>
+              <AdoPanel
+                csrfToken={csrfToken}
+                isAdmin={selectedProject?.role === "ADMIN"}
+                onOpenAnalysis={() => setScreen("analysis")}
+                projectId={projectId}
+              />
               {selectedProject?.role === "QA_LEAD" && (
                 <SeedImport csrfToken={csrfToken} projectId={projectId} />
               )}

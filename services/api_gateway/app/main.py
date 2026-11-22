@@ -11,6 +11,13 @@ from starlette.responses import JSONResponse
 from libs.common.config import settings
 from libs.common.database import create_mongo_client, ping_database
 from libs.common.logging import configure_logging
+from libs.common.observability import (
+    docs_urls,
+    enforce_production_settings,
+    install_request_context,
+)
+from services.api_gateway.app.admin_api import router as admin_router
+from services.api_gateway.app.ado_api import router as ado_router
 from services.api_gateway.app.api import router
 from services.api_gateway.app.auth.rate_limit import enforce_rate_limit
 from services.api_gateway.app.knowledge_api import router as knowledge_router
@@ -24,6 +31,7 @@ mongo_client: AsyncIOMotorClient[dict[str, Any]] | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global mongo_client
+    enforce_production_settings(settings, needs_session=True)
     if settings.mongodb_uri:
         mongo_client = create_mongo_client(settings.mongodb_uri)
     app.state.mongo_client = mongo_client
@@ -34,11 +42,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.mongo_client = None
 
 
-app = FastAPI(title="DefectDNA API Gateway", lifespan=lifespan)
+app = FastAPI(title="DefectDNA API Gateway", lifespan=lifespan, **docs_urls(settings))
 app.include_router(router, dependencies=[Depends(enforce_rate_limit)])
 app.include_router(rca_router, dependencies=[Depends(enforce_rate_limit)])
 app.include_router(trends_router, dependencies=[Depends(enforce_rate_limit)])
 app.include_router(knowledge_router, dependencies=[Depends(enforce_rate_limit)])
+app.include_router(admin_router, dependencies=[Depends(enforce_rate_limit)])
+app.include_router(ado_router, dependencies=[Depends(enforce_rate_limit)])
 
 
 @app.middleware("http")
@@ -54,6 +64,10 @@ async def security_headers(request: Request, call_next: Any) -> Any:
     return response
 
 
+# Added last so it wraps everything: every response and log line carries the ID.
+install_request_context(app)
+
+
 @app.exception_handler(HTTPException)
 async def http_error_handler(request: Request, exc: HTTPException) -> JSONResponse:
     detail: dict[str, Any] = exc.detail if isinstance(exc.detail, dict) else {}
@@ -63,7 +77,7 @@ async def http_error_handler(request: Request, exc: HTTPException) -> JSONRespon
         "code": code,
         "message": message,
         "details": [],
-        "correlation_id": request.headers.get("X-Correlation-ID"),
+        "correlation_id": getattr(request.state, "correlation_id", None),
     }
     if "retry_after_seconds" in detail:
         error["details"] = [
@@ -94,7 +108,7 @@ async def validation_error_handler(
                 "code": "VALIDATION_ERROR",
                 "message": "Request validation failed",
                 "details": details,
-                "correlation_id": request.headers.get("X-Correlation-ID"),
+                "correlation_id": getattr(request.state, "correlation_id", None),
             }
         },
     )

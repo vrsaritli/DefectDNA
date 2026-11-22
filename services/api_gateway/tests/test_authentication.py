@@ -9,10 +9,10 @@ from fastapi.testclient import TestClient
 from mongomock_motor import AsyncMongoMockClient
 
 from libs.common.config import settings
+from services.api_gateway.app import api as gateway_api
 from services.api_gateway.app.auth.dependencies import get_database
 from services.api_gateway.app.auth.passwords import hash_password
 from services.api_gateway.app.auth.repository import ensure_auth_indexes
-from services.api_gateway.app import api as gateway_api
 from services.api_gateway.app.main import app
 
 
