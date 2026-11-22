@@ -40,7 +40,16 @@ class Settings(BaseSettings):
     cohere_embed_dimensions: int = Field(default=1024, ge=128, le=4_096)
     cohere_embed_input_type: str = "search_document"
     rag_top_k: int = Field(default=5, ge=1, le=50)
-    rag_similarity_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    # Cosine floor for retrieved cases. Calibrated 2026-11-22 on embed-english-v3.0 (query vs
+    # document): unrelated golden-set pairs score <= ~0.45 (p90), near matches 0.5-0.85.
+    rag_similarity_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    cohere_base_url: str = "https://api.cohere.com"
+    cohere_timeout_seconds: float = Field(default=30.0, ge=1, le=300)
+    cohere_max_retries: int = Field(default=3, ge=0, le=10)
+    embed_daily_call_cap: int = Field(default=1_000, ge=1, le=100_000)
+    # "auto" tries Atlas $vectorSearch and falls back to in-process cosine; "atlas" or "local" force one.
+    rag_vector_search_mode: str = "auto"
+    rag_vector_index_name: str = "knowledge_vector_index"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

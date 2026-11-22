@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./style.css";
 import { Analysis } from "./Analysis";
 import { Dashboard } from "./Dashboard";
+import { SeedImport } from "./SeedImport";
 import { api, type RcaView } from "./api";
 
 type Screen = "dashboard" | "import" | "defects" | "analysis";
@@ -429,6 +430,9 @@ function App() {
                   </button>
                 </form>
               </div>
+              {selectedProject?.role === "QA_LEAD" && (
+                <SeedImport csrfToken={csrfToken} projectId={projectId} />
+              )}
             </>
           ) : (
             <p className="notice">A QA Lead or Admin role is required to import or sync defects.</p>

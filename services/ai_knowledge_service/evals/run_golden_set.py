@@ -12,6 +12,7 @@ Usage:
 import argparse
 import asyncio
 import json
+import math
 import statistics
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ from typing import Any
 
 from libs.common.config import Settings
 from libs.common.taxonomy import TAXONOMY_KINDS, Taxonomy, starter_taxonomy
+from services.ai_knowledge_service.app.adapters.embedding import build_embedding_client
 from services.ai_knowledge_service.app.adapters.llm import GroqLLMClient, LLMClient, LLMResponse
 from services.ai_knowledge_service.app.analysis import (
     AI_PROPOSED,
@@ -28,11 +30,19 @@ from services.ai_knowledge_service.app.analysis import (
     TokenBudget,
     analyze_defects,
 )
+from services.ai_knowledge_service.app.knowledge import (
+    Retrieval,
+    Retriever,
+    defect_text,
+    knowledge_text,
+    summary_line,
+    to_case,
+)
 from services.ai_knowledge_service.app.pipeline.validate import (
     ProposalValidationError,
     validate_item,
 )
-from services.ai_knowledge_service.app.prompts.rca_v1 import (
+from services.ai_knowledge_service.app.prompts.rca_v2 import (
     MAX_RATIONALE_CHARS,
     PROMPT_VERSION,
 )
@@ -297,14 +307,21 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
         )
     )
     started = datetime.now(UTC)
+    retriever = await leave_one_out_retriever(cases, taxonomy, settings) if args.rag else None
     try:
         outcomes = await analyze_defects(
-            [case["defect"] for case in cases], taxonomy, llm, budget=budget
+            [case["defect"] for case in cases],
+            taxonomy,
+            llm,
+            budget=budget,
+            retriever=retriever,
         )
     finally:
         await llm.close()
     scored_fields = sorted({name for case in cases for name in case["expected"]})
     return {
+        "rag": bool(args.rag),
+        "retrieval": retrieval_stats(outcomes) if args.rag else None,
         "run_at": started.isoformat(timespec="seconds"),
         "duration_seconds": round((datetime.now(UTC) - started).total_seconds(), 1),
         "golden_set": Path(args.golden_set).name,
@@ -319,8 +336,89 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+async def leave_one_out_retriever(
+    cases: list[dict[str, Any]], taxonomy: Taxonomy, settings: Settings
+) -> Retriever:
+    """RAG over the golden set itself: every case is grounded on the *other* cases'
+    confirmed labels (never its own), with the production top-k and threshold."""
+    embedder = build_embedding_client(settings)
+    if embedder is None:
+        raise SystemExit("--rag needs COHERE_API_KEY")
+    docs = await embedder.embed(
+        [
+            knowledge_text(case["defect"], case["expected"], taxonomy, None)
+            for case in cases
+        ],
+        "search_document",
+    )
+    entries = [
+        {
+            "_id": case["id"],
+            "defect_id": int(case["defect"]["ado_id"]),
+            "title": case["defect"].get("title"),
+            "module": case["defect"].get("module"),
+            "release": case["defect"].get("release"),
+            "summary": summary_line(case["defect"]),
+            "root_cause_code": case["expected"].get("root_cause_code"),
+            "sdlc_phase_code": case["expected"].get("sdlc_phase_code"),
+            "testing_gap_code": case["expected"].get("testing_gap_code"),
+            "source": "GOLDEN_SET",
+            "vector": vector,
+        }
+        for case, vector in zip(cases, docs, strict=True)
+    ]
+
+    def cosine(left: list[float], right: list[float]) -> float:
+        dot = sum(a * b for a, b in zip(left, right, strict=True))
+        norm = math.sqrt(sum(a * a for a in left)) * math.sqrt(sum(b * b for b in right))
+        return dot / norm if norm else 0.0
+
+    async def retrieve(defects: list[dict[str, Any]]) -> Retrieval:
+        queries = await embedder.embed([defect_text(d) for d in defects], "search_query")
+        found: dict[int, list[dict[str, Any]]] = {}
+        for defect, query in zip(defects, queries, strict=True):
+            ado_id = int(defect["ado_id"])
+            scored = sorted(
+                (
+                    {**entry, "score": round(cosine(query, entry["vector"]), 6)}
+                    for entry in entries
+                    if entry["defect_id"] != ado_id
+                ),
+                key=lambda entry: -entry["score"],
+            )
+            kept = [e for e in scored if e["score"] >= settings.rag_similarity_threshold]
+            found[ado_id] = [
+                to_case(entry, f"C{index}")
+                for index, entry in enumerate(kept[: settings.rag_top_k], 1)
+            ]
+        return Retrieval(status="OK", cases=found, embedding_model=embedder.model)
+
+    return retrieve
+
+
+def retrieval_stats(outcomes: dict[int, AnalysisOutcome]) -> dict[str, Any]:
+    retrieved = [len(o.retrieved_cases) for o in outcomes.values()]
+    cited = [len(o.cited_cases) for o in outcomes.values()]
+    valid = all(
+        {c["knowledge_entry_id"] for c in o.cited_cases}
+        <= {c["knowledge_entry_id"] for c in o.retrieved_cases}
+        for o in outcomes.values()
+    )
+    return {
+        "cases_with_retrieval": sum(1 for count in retrieved if count),
+        "mean_retrieved": round(statistics.fmean(retrieved), 2) if retrieved else 0,
+        "cases_citing": sum(1 for count in cited if count),
+        "citation_validity": 1.0 if valid else 0.0,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the RCA golden set")
+    parser.add_argument(
+        "--rag",
+        action="store_true",
+        help="Ground each case on the other golden cases (leave-one-out); needs COHERE_API_KEY",
+    )
     parser.add_argument("--golden-set", default=str(EVALS_DIR / "golden_set.json"))
     parser.add_argument("--taxonomy", help="Taxonomy JSON (defaults to the starter taxonomy)")
     parser.add_argument("--reasoning-effort", default=Settings().groq_reasoning_effort)
@@ -332,7 +430,7 @@ def main() -> None:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    stem = f"{stamp}-{PROMPT_VERSION}-{args.reasoning_effort}"
+    stem = f"{stamp}-{PROMPT_VERSION}-{args.reasoning_effort}{'-rag' if args.rag else ''}"
     (out_dir / f"{stem}.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     (out_dir / f"{stem}.md").write_text(render_markdown(report), encoding="utf-8")
     s = report["scores"]

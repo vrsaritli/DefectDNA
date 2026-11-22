@@ -30,8 +30,20 @@ async def process_trend_fact_job(
     owner: str,
 ) -> bool:
     job_id = str(job["_id"])
+    payload = job.get("payload", {})
+    remove = payload.get("remove")
+    if isinstance(remove, dict):
+        try:
+            project_id, defect_id = str(remove["project_id"]), int(remove["defect_id"])
+        except (KeyError, TypeError, ValueError):
+            await queue.fail(job_id, owner, "INVALID_TREND_FACT")
+            return False
+        await database["trend_facts"].delete_one({"project_id": project_id, "defect_id": defect_id})
+        await queue.complete(job_id, owner)
+        logger.info("trend_fact_removed", job_id=job_id, project_id=project_id, defect_id=defect_id)
+        return True
     try:
-        fact = TrendFact.model_validate(job.get("payload", {}).get("fact", {}))
+        fact = TrendFact.model_validate(payload.get("fact", {}))
     except ValidationError:
         await queue.fail(job_id, owner, "INVALID_TREND_FACT")
         logger.error("trend_fact_invalid", job_id=job_id)

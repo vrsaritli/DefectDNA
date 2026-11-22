@@ -57,6 +57,17 @@ def test_worker_upserts_one_fact_per_defect(trends: tuple[TestClient, Any, dict[
             job = await queue.claim(TREND_FACT_JOB, "w")
             assert job is not None
             assert await process_trend_fact_job(job, database=database, queue=queue, owner="w")
+        await queue.enqueue(TREND_FACT_JOB, {"project_id": "project-a", "fact": _fact(3)})
+        added = await queue.claim(TREND_FACT_JOB, "w")
+        assert added is not None
+        await process_trend_fact_job(added, database=database, queue=queue, owner="w")
+        await queue.enqueue(
+            TREND_FACT_JOB,
+            {"project_id": "project-a", "remove": {"project_id": "project-a", "defect_id": 3}},
+        )
+        removal = await queue.claim(TREND_FACT_JOB, "w")
+        assert removal is not None
+        assert await process_trend_fact_job(removal, database=database, queue=queue, owner="w")
         await queue.enqueue(TREND_FACT_JOB, {"project_id": "project-a", "fact": {"bad": 1}})
         bad = await queue.claim(TREND_FACT_JOB, "w")
         assert bad is not None

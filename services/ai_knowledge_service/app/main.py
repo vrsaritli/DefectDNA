@@ -9,6 +9,7 @@ from libs.common.config import Settings
 from libs.common.database import create_mongo_client, ping_database
 from libs.common.logging import configure_logging
 from services.ai_knowledge_service.app.api import router as aik_router
+from services.ai_knowledge_service.app.knowledge_api import router as knowledge_router
 
 settings = Settings()
 configure_logging("ai-knowledge-service")
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="DefectDNA AI Knowledge Service", lifespan=lifespan)
 app.include_router(aik_router)
+app.include_router(knowledge_router)
 
 
 @app.get("/health")

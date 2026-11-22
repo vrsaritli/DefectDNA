@@ -48,18 +48,60 @@ class FinalCodes(BaseModel):
     root_cause_code: str = Field(min_length=1, max_length=64)
     sdlc_phase_code: str = Field(min_length=1, max_length=64)
     testing_gap_code: str = Field(min_length=1, max_length=64)
+    # Accepted for compatibility with POSTMAN_PHASE5.md "correction" bodies.
+    rationale: str | None = Field(default=None, max_length=2_000, exclude=True)
 
 
 class ReviewBody(BaseModel):
     decision: Literal["APPROVE", "CORRECT"] = Field(
         validation_alias=AliasChoices("decision", "action")
     )
-    final: FinalCodes | None = None
+    final: FinalCodes | None = Field(
+        default=None, validation_alias=AliasChoices("final", "correction")
+    )
     note: str | None = Field(default=None, max_length=2_000)
     reopen: bool = False
 
 
 # ---------------------------------------------------------------- review commit
+
+
+async def _load_rca(rca_id: str, expected_project: str | None = None) -> dict[str, Any]:
+    _, found = await core._call_ai_knowledge("GET", f"/internal/rcas/{rca_id}")
+    rca = found.get("rca")
+    if not isinstance(rca, dict) or not isinstance(rca.get("project_id"), str):
+        raise HTTPException(status_code=404, detail={"code": "RCA_NOT_FOUND"})
+    if expected_project is not None and rca["project_id"] != expected_project:
+        raise HTTPException(status_code=404, detail={"code": "RCA_NOT_FOUND"})
+    return rca
+
+
+async def _defect_text(project_id: str, ado_id: Any) -> dict[str, Any] | None:
+    """Defect text for the knowledge entry; review still works if ingestion is down."""
+    try:
+        _, result = await core._call_ingestion(
+            "GET", f"/internal/projects/{project_id}/defects/{ado_id}"
+        )
+    except HTTPException:
+        return None
+    defect = result.get("defect") or {}
+    return {
+        key: defect.get(key) or ""
+        for key in ("title", "description", "repro_steps", "comments", "module", "release")
+    }
+
+
+@router.post("/projects/{project_id}/rcas/{rca_id}/review")
+async def review_project_rca(
+    project_id: str,
+    rca_id: str,
+    body: ReviewBody,
+    current: CurrentUserDependency,
+    database: DatabaseDependency,
+) -> dict[str, Any]:
+    """Project-scoped alias of POST /rcas/{rca_id}/review (POSTMAN_PHASE5.md path)."""
+    await _load_rca(rca_id, project_id)
+    return await review_rca(rca_id, body, current, database)
 
 
 @router.post("/rcas/{rca_id}/review")
@@ -69,12 +111,11 @@ async def review_rca(
     current: CurrentUserDependency,
     database: DatabaseDependency,
 ) -> dict[str, Any]:
-    _, found = await core._call_ai_knowledge("GET", f"/internal/rcas/{rca_id}")
-    rca = found.get("rca")
-    if not isinstance(rca, dict) or not isinstance(rca.get("project_id"), str):
-        raise HTTPException(status_code=404, detail={"code": "RCA_NOT_FOUND"})
+    rca = await _load_rca(rca_id)
     project_id: str = rca["project_id"]
     await core._require_project_role(project_id, current, database, _REVIEWERS)
+    if body.note is None and body.final is not None and body.final.rationale:
+        body.note = body.final.rationale
 
     version = rca.get("taxonomy_version")
     taxonomy = (
@@ -104,6 +145,7 @@ async def review_rca(
             "reviewer_id": str(current["user"]["_id"]),
             "reopen": body.reopen,
             "taxonomy": taxonomy.to_payload(),
+            "defect": await _defect_text(project_id, rca.get("defect_id")),
         },
     )
     await write_audit(
@@ -122,7 +164,48 @@ async def review_rca(
     _, refreshed = await core._call_ai_knowledge("GET", f"/internal/rcas/{rca_id}")
     view = await enrich_rca(database, project_id, refreshed["rca"])
     view["trend_job_id"] = result.get("trend_job_id")
+    view["knowledge_entry_id"] = result.get("knowledge_entry_id")
+    view["knowledge_status"] = result.get("knowledge_status")
     return view
+
+
+async def _reopen(
+    rca_id: str, current: dict[str, Any], database: Any, expected_project: str | None
+) -> dict[str, Any]:
+    rca = await _load_rca(rca_id, expected_project)
+    project_id: str = rca["project_id"]
+    await core._require_project_role(project_id, current, database, _REVIEWERS)
+    _, result = await core._call_ai_knowledge(
+        "POST",
+        f"/internal/rcas/{rca_id}/reopen",
+        json_body={"reviewer_id": str(current["user"]["_id"])},
+    )
+    await write_audit(
+        database,
+        action="RCA_REOPENED",
+        actor_user_id=current["user"]["_id"],
+        project_id=project_id,
+        entity="rca_analyses",
+        entity_id=rca_id,
+        detail={"defect_id": result.get("defect_id"), "previous_status": result.get("previous_status")},
+    )
+    _, refreshed = await core._call_ai_knowledge("GET", f"/internal/rcas/{rca_id}")
+    return await enrich_rca(database, project_id, refreshed["rca"])
+
+
+@router.post("/rcas/{rca_id}/reopen")
+async def reopen_rca(
+    rca_id: str, current: CurrentUserDependency, database: DatabaseDependency
+) -> dict[str, Any]:
+    """Undo a review: back to the AI proposal, out of the knowledge base and trends."""
+    return await _reopen(rca_id, current, database, None)
+
+
+@router.post("/projects/{project_id}/rcas/{rca_id}/reopen")
+async def reopen_project_rca(
+    project_id: str, rca_id: str, current: CurrentUserDependency, database: DatabaseDependency
+) -> dict[str, Any]:
+    return await _reopen(rca_id, current, database, project_id)
 
 
 # ---------------------------------------------------------------------- trends

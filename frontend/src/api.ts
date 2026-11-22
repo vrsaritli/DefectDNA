@@ -17,14 +17,39 @@ export function errorMessage(error: unknown, fallback: string): string {
 
 export type Coded = { code: string; label: string } | null;
 
+export type CaseView = {
+  ref: string;
+  knowledge_entry_id?: string;
+  defect_id: number;
+  similarity: number | null;
+  title?: string;
+  module?: string;
+  summary?: string;
+  source?: string;
+  root_cause: Coded;
+  sdlc_phase: Coded;
+  testing_gap: Coded;
+};
+
+export type KnowledgeStats = {
+  total: number;
+  active: number;
+  pending_embedding: number;
+  by_source: Record<string, number>;
+  rag_enabled: boolean;
+  current_embedding_model: string;
+};
+
 export type RcaView = {
   id: string;
   status: "AI_PROPOSED" | "NEEDS_MANUAL_RCA" | "APPROVED" | "CORRECTED";
   version: number;
   final?: { root_cause: Coded; sdlc_phase: Coded; testing_gap: Coded; note?: string | null } | null;
   reviewed_at?: string | null;
-  cited_cases?: { id: string; defect_id: number; title?: string; final?: Record<string, unknown> }[];
-  retrieved_cases?: string[];
+  cited_cases?: CaseView[];
+  retrieved_cases?: CaseView[];
+  retrieval_status?: string | null;
+  review_source?: "REVIEW" | "SEED_IMPORT" | null;
   defect: { ado_id: number; title?: string; module?: string; release?: string; severity?: string; closed_month?: string | null };
   proposed: { root_cause: Coded; sdlc_phase: Coded; testing_gap: Coded; other_proposal: string | null; confidence: number; rationale: string } | null;
   failure_reason: string | null;

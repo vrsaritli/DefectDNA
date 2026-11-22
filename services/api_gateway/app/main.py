@@ -13,6 +13,7 @@ from libs.common.database import create_mongo_client, ping_database
 from libs.common.logging import configure_logging
 from services.api_gateway.app.api import router
 from services.api_gateway.app.auth.rate_limit import enforce_rate_limit
+from services.api_gateway.app.knowledge_api import router as knowledge_router
 from services.api_gateway.app.rca_api import router as rca_router
 from services.api_gateway.app.trends_api import router as trends_router
 
@@ -37,6 +38,7 @@ app = FastAPI(title="DefectDNA API Gateway", lifespan=lifespan)
 app.include_router(router, dependencies=[Depends(enforce_rate_limit)])
 app.include_router(rca_router, dependencies=[Depends(enforce_rate_limit)])
 app.include_router(trends_router, dependencies=[Depends(enforce_rate_limit)])
+app.include_router(knowledge_router, dependencies=[Depends(enforce_rate_limit)])
 
 
 @app.middleware("http")

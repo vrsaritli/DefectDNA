@@ -20,7 +20,7 @@ from services.ai_knowledge_service.app.adapters.llm import (
     LLMProviderError,
 )
 from services.ai_knowledge_service.app.pipeline.validate import RcaProposal, validate_batch
-from services.ai_knowledge_service.app.prompts.rca_v1 import (
+from services.ai_knowledge_service.app.prompts.rca_v2 import (
     CHARS_PER_TOKEN,
     MAX_RATIONALE_CHARS,
     PROMPT_VERSION,
@@ -31,8 +31,11 @@ from services.ai_knowledge_service.app.prompts.rca_v1 import (
     compose_defect_record,
     defect_ref,
     estimate_prompt_tokens,
+    estimate_tokens,
     render_record,
 )
+
+Retriever = Callable[[list[dict[str, Any]]], Awaitable[Any]]
 
 AI_PROPOSED = "AI_PROPOSED"
 NEEDS_MANUAL_RCA = "NEEDS_MANUAL_RCA"
@@ -74,6 +77,7 @@ class PreparedDefect:
     ref: str
     rendered: str
     scrub_counts: dict[str, int]
+    cases: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -97,6 +101,10 @@ class AnalysisOutcome:
     max_completion_tokens: int = 0
     usage: dict[str, int] = field(default_factory=dict)
     latency_ms: int = 0
+    retrieval_status: str = "DISABLED"
+    embedding_model: str | None = None
+    retrieved_cases: list[dict[str, Any]] = field(default_factory=list)
+    cited_cases: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -107,10 +115,14 @@ class _Attempt:
     model: str
     usage: dict[str, int]
     latency_ms: int
+    citations: dict[str, list[str]] = field(default_factory=dict)
 
 
 def prepare_defects(
-    defects: list[dict[str, Any]], taxonomy: Taxonomy, budget: TokenBudget
+    defects: list[dict[str, Any]],
+    taxonomy: Taxonomy,
+    budget: TokenBudget,
+    cases_by_id: dict[int, list[dict[str, Any]]] | None = None,
 ) -> tuple[str, list[PreparedDefect]]:
     system_prompt = build_system_prompt(taxonomy)
     base = estimate_prompt_tokens(system_prompt, [])
@@ -119,18 +131,23 @@ def prepare_defects(
     per_defect_tokens = max(
         _MIN_DEFECT_TOKENS, budget.batch_target - base - budget.output_per_defect
     )
-    max_chars = max(600, int(per_defect_tokens * CHARS_PER_TOKEN) - _RECORD_JSON_OVERHEAD_CHARS)
     prepared = []
     for defect in defects:
         ado_id = int(defect["ado_id"])
-        record, counts = compose_defect_record(defect, max_chars)
+        cases = (cases_by_id or {}).get(ado_id, [])
         ref = defect_ref(ado_id)
+        # Retrieved cases share the per-defect token allowance with the defect text.
+        case_tokens = estimate_tokens(render_record(ref, {}, cases)) if cases else 0
+        available = max(_MIN_DEFECT_TOKENS, per_defect_tokens - case_tokens)
+        max_chars = max(600, int(available * CHARS_PER_TOKEN) - _RECORD_JSON_OVERHEAD_CHARS)
+        record, counts = compose_defect_record(defect, max_chars)
         prepared.append(
             PreparedDefect(
                 ado_id=ado_id,
                 ref=ref,
-                rendered=render_record(ref, record),
+                rendered=render_record(ref, record, cases),
                 scrub_counts=counts,
+                cases=cases,
             )
         )
     return system_prompt, prepared
@@ -195,7 +212,9 @@ async def _run_batch(
             messages=build_messages(
                 system_prompt, [item.rendered for item in batch.items], retry_reason=retry_reason
             ),
-            schema=build_output_schema(taxonomy, refs),
+            schema=build_output_schema(
+                taxonomy, refs, max((len(item.cases) for item in batch.items), default=0)
+            ),
             schema_name=SCHEMA_NAME,
             max_completion_tokens=batch.max_completion_tokens,
         )
@@ -204,7 +223,11 @@ async def _run_batch(
     except LLMProviderError as exc:
         return _Attempt({}, {ref: exc.code for ref in refs}, False, llm.model, {}, elapsed())
     validation = validate_batch(
-        response.content, taxonomy, refs, max_rationale_chars=MAX_RATIONALE_CHARS
+        response.content,
+        taxonomy,
+        refs,
+        max_rationale_chars=MAX_RATIONALE_CHARS,
+        case_counts={item.ref: len(item.cases) for item in batch.items},
     )
     return _Attempt(
         validation.proposals,
@@ -213,6 +236,7 @@ async def _run_batch(
         response.model,
         dict(response.usage),
         elapsed(),
+        validation.citations,
     )
 
 
@@ -223,7 +247,10 @@ def _outcome(
     status: Literal["AI_PROPOSED", "NEEDS_MANUAL_RCA"] = (
         "AI_PROPOSED" if proposal else "NEEDS_MANUAL_RCA"
     )
+    cited_refs = set(attempt.citations.get(item.ref, [])) if proposal else set()
     return AnalysisOutcome(
+        retrieved_cases=item.cases,
+        cited_cases=[case for case in item.cases if case["ref"] in cited_refs],
         status=status,
         proposal=proposal,
         failure_reason=None if proposal else attempt.errors.get(item.ref, "UNKNOWN"),
@@ -246,15 +273,34 @@ async def analyze_defects(
     budget: TokenBudget,
     acquire_call: AcquireCall | None = None,
     on_batch_done: Callable[[dict[int, AnalysisOutcome]], Awaitable[None]] | None = None,
+    retriever: Retriever | None = None,
 ) -> dict[int, AnalysisOutcome]:
     """Analyze defects in token-budgeted batches.
 
+    ``retriever`` (RAG) returns similar confirmed cases per defect; when it is absent or
+    fails, analysis proceeds without cases and the status is recorded on each outcome.
     ``on_batch_done`` receives each batch's outcomes as soon as they are final, so callers
     can persist progress. ``DailyCapReached`` propagates; outcomes already delivered stay.
     """
-    system_prompt, prepared = prepare_defects(defects, taxonomy, budget)
+    retrieval_status = "DISABLED"
+    embedding_model: str | None = None
+    cases_by_id: dict[int, list[dict[str, Any]]] = {}
+    if retriever is not None and defects:
+        retrieval = await retriever(defects)
+        retrieval_status = retrieval.status
+        embedding_model = retrieval.embedding_model
+        cases_by_id = retrieval.cases
+    system_prompt, prepared = prepare_defects(defects, taxonomy, budget, cases_by_id)
     by_ref = {item.ref: item for item in prepared}
     results: dict[int, AnalysisOutcome] = {}
+
+    async def deliver(outcomes: dict[int, AnalysisOutcome]) -> None:
+        for outcome in outcomes.values():
+            outcome.retrieval_status = retrieval_status
+            outcome.embedding_model = embedding_model
+        results.update(outcomes)
+        if on_batch_done is not None and outcomes:
+            await on_batch_done(outcomes)
 
     for batch in plan_batches(system_prompt, prepared, budget):
         batch_outcomes: dict[int, AnalysisOutcome] = {}
@@ -300,12 +346,8 @@ async def analyze_defects(
                         record(by_ref[item.ref], second, retry_batch, MAX_OUTPUT_ATTEMPTS)
             except DailyCapReached:
                 # Keep what the first attempt already settled, then stop.
-                results.update(batch_outcomes)
-                if on_batch_done is not None and batch_outcomes:
-                    await on_batch_done(batch_outcomes)
+                await deliver(batch_outcomes)
                 raise
 
-        results.update(batch_outcomes)
-        if on_batch_done is not None:
-            await on_batch_done(batch_outcomes)
+        await deliver(batch_outcomes)
     return results

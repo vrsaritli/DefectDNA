@@ -105,6 +105,23 @@ def _coded(taxonomy: Taxonomy | None, kind: TaxonomyKind, code: Any) -> dict[str
     return {"code": code, "label": label or code}
 
 
+def _case_view(taxonomy: Taxonomy | None, case: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "ref": case.get("ref"),
+        "knowledge_entry_id": case.get("knowledge_entry_id"),
+        "defect_id": case.get("defect_id"),
+        "similarity": case.get("similarity"),
+        "title": case.get("title"),
+        "module": case.get("module"),
+        "release": case.get("release"),
+        "summary": case.get("summary"),
+        "source": case.get("source"),
+        "root_cause": _coded(taxonomy, "root_causes", case.get("root_cause_code")),
+        "sdlc_phase": _coded(taxonomy, "sdlc_phases", case.get("sdlc_phase_code")),
+        "testing_gap": _coded(taxonomy, "testing_gaps", case.get("testing_gap_code")),
+    }
+
+
 async def enrich_rca(
     database: AsyncIOMotorDatabase[dict[str, Any]],
     project_id: str,
@@ -150,7 +167,12 @@ async def enrich_rca(
         "proposed": proposed_view,
         "final": {**(classification(final) or {}), "note": final.get("note")} if final else None,
         "failure_reason": rca.get("failure_reason"),
-        "cited_cases": rca.get("cited_cases") or [],
+        "cited_cases": [_case_view(taxonomy, case) for case in rca.get("cited_cases") or []],
+        "retrieved_cases": [
+            _case_view(taxonomy, case) for case in rca.get("retrieved_cases") or []
+        ],
+        "retrieval_status": rca.get("retrieval_status"),
+        "review_source": rca.get("review_source"),
         "taxonomy_version": version,
         "model": rca.get("model"),
         "llm_attempts": rca.get("llm_attempts"),

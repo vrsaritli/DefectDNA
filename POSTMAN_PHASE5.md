@@ -129,3 +129,20 @@ X-CSRF-Token: <csrf-token>
   "final": null
 }
 ```
+
+## Implementation notes (Phase 5 completion)
+
+The endpoints above are implemented. Differences from the examples:
+
+- Review also accepts `POST /api/v1/rcas/<rca-id>/review` and `{"decision": ...,
+  "final": {...}, "note": "..."}`. In a `correction`, `rationale` is stored as the
+  reviewer note; `confidence` and `other_proposal` are ignored (they describe the AI's
+  proposal, not a QA decision).
+- Responses return the full RCA view (proposal, confirmed RCA, retrieved and cited
+  cases, `knowledge_status`), not only the fields shown.
+- An approval returns `502 EMBEDDING_PROVIDER_ERROR` when Cohere fails; nothing is
+  committed and the request can be retried.
+- Reopen also removes the RCA from the knowledge base and the dashboard trends.
+- Also available: `POST /api/v1/projects/<pid>/knowledge/seed` (multipart file),
+  `GET /api/v1/projects/<pid>/knowledge/stats`,
+  `POST /api/v1/projects/<pid>/knowledge/reembed`.

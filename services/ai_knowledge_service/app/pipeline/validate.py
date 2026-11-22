@@ -42,6 +42,19 @@ class RcaProposal:
 class BatchValidation:
     proposals: dict[str, RcaProposal] = field(default_factory=dict)
     errors: dict[str, str] = field(default_factory=dict)
+    citations: dict[str, list[str]] = field(default_factory=dict)
+
+
+def _validate_citations(value: Any, retrieved: int) -> list[str]:
+    """Cited case refs must be a subset of the refs retrieved for that record."""
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ProposalValidationError("INVALID_CITATIONS")
+    allowed = {f"C{index}" for index in range(1, retrieved + 1)}
+    if any(item not in allowed for item in value):
+        raise ProposalValidationError("CITATION_NOT_RETRIEVED")
+    return list(dict.fromkeys(value))
 
 
 def validate_item(
@@ -97,7 +110,12 @@ def validate_item(
 
 
 def validate_batch(
-    raw: str, taxonomy: Taxonomy, refs: list[str], *, max_rationale_chars: int
+    raw: str,
+    taxonomy: Taxonomy,
+    refs: list[str],
+    *,
+    max_rationale_chars: int,
+    case_counts: dict[str, int] | None = None,
 ) -> BatchValidation:
     """Validate a batch answer. Every requested ref ends up in proposals or errors."""
     result = BatchValidation()
@@ -129,11 +147,15 @@ def validate_batch(
         ref = item.get("ref")
         if ref not in wanted or seen.get(ref, 0) != 1:
             continue
-        body = {key: value for key, value in item.items() if key != "ref"}
+        body = {key: value for key, value in item.items() if key not in {"ref", "cited_cases"}}
         try:
+            citations = _validate_citations(
+                item.get("cited_cases"), (case_counts or {}).get(ref, 0)
+            )
             result.proposals[ref] = validate_item(
                 body, taxonomy, max_rationale_chars=max_rationale_chars
             )
+            result.citations[ref] = citations
         except ProposalValidationError as exc:
             result.errors[ref] = exc.code
 

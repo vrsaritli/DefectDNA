@@ -10,6 +10,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 TREND_FACT_JOB = "trend_fact"
+# A trend_fact job either carries {"fact": {...}} (upsert) or
+# {"remove": {"project_id": ..., "defect_id": ...}} when a review is reopened.
 UNKNOWN = "Unknown"
 
 # Public group-by / filter names -> trend_facts fields.
@@ -34,7 +36,8 @@ class TrendFact(BaseModel):
     month: str = Field(default=UNKNOWN, max_length=7)
     severity: str = Field(default=UNKNOWN, max_length=100)
     root_cause_code: str = Field(max_length=64)
-    sdlc_phase_code: str = Field(max_length=64)
-    testing_gap_code: str = Field(max_length=64)
+    sdlc_phase_code: str = Field(default=UNKNOWN, max_length=64)
+    testing_gap_code: str = Field(default=UNKNOWN, max_length=64)
     ai_root_cause_code: str | None = Field(default=None, max_length=64)
+    source: Literal["REVIEW", "SEED_IMPORT"] = "REVIEW"
     reviewed_at: datetime | None = None

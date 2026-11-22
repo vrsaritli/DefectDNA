@@ -50,3 +50,10 @@ In each case the model's answer matches the developer evidence. This baseline
 therefore measures label quality as much as AI quality. Before Phase 5 compares RAG
 against this baseline, a QA Lead should confirm or correct the 42 labels (pending
 item P7: "golden-set defects with confirmed RCAs").
+
+### rca-v2 without RAG — 2026-11-22
+
+Same golden set, `rca-v2` prompt, no knowledge base: **19.0%** (8/42), 100%
+conformance, 15 requests of 3 defects, mean 3,206 / max 3,535 tokens. The one-case
+difference from rca-v1 is within noise. The RAG comparison (`--rag`) needs
+`COHERE_API_KEY` and has not been run yet.

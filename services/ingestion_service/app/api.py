@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from libs.common.config import settings
 from libs.common.service_auth import verify_service_token
 from services.ingestion_service.app.ado import AdoDefectSource
-from services.ingestion_service.app.parsing import parse_defect_file
+from services.ingestion_service.app.parsing import extract_confirmed_labels, parse_defect_file
 
 router = APIRouter()
 _PROJECT_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{1,62}$")
@@ -378,3 +378,43 @@ async def get_defect(
     if defect is None:
         raise HTTPException(status_code=404, detail={"code": "DEFECT_NOT_FOUND"})
     return {"defect": _serialize_defect(defect), "rca": None}
+
+
+@router.post("/internal/seed-imports")
+async def seed_import(
+    request: Request,
+    file: Annotated[UploadFile, File()],
+    project_id: Annotated[str, Header(alias="X-Project-ID")],
+    user_id: Annotated[str, Header(alias="X-User-ID")],
+    mapping_json: Annotated[str | None, Form(alias="mapping")] = None,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Import defects like /internal/imports and return their QA-confirmed RCA labels."""
+    imported = await import_file(
+        request, file, project_id, user_id, mapping_json, authorization
+    )
+    await file.seek(0)
+    content = await file.read(settings.max_import_file_bytes + 1)
+    columns, labels = extract_confirmed_labels(
+        file.filename or "", content, max_rows=settings.max_import_rows
+    )
+    if "root_cause" not in columns:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "MISSING_RCA_COLUMNS",
+                "message": "A confirmed root-cause column such as 'Root Cause (RCA)' is required",
+            },
+        )
+    defects = await _database(request)["defects"].find(
+        {"project_id": project_id, "ado_id": {"$in": sorted(labels)}}, _ANALYSIS_FIELDS
+    ).to_list(length=None)
+    for defect in defects:
+        defect["severity"] = defect.get("severity") or ""
+    return {
+        **imported,
+        "rca_columns": columns,
+        "confirmed": [
+            {"defect": defect, "labels": labels[defect["ado_id"]]} for defect in defects
+        ],
+    }

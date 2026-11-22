@@ -253,3 +253,68 @@ def parse_defect_file(
         "preview_rows": accepted[:MAX_PREVIEW_ROWS],
         "defects": accepted,
     }
+
+
+# Columns that hold a QA-confirmed RCA in seed files (historical, reviewed defects).
+# "SDLC Phase" alone is deliberately absent: in ADO exports it usually means where the
+# defect was found, not where it was introduced.
+_CONFIRMED_ALIASES = {
+    "root_cause": {
+        "root cause (rca)",
+        "rca root cause",
+        "root cause",
+        "confirmed root cause",
+        "ct_root cause",
+        "root_cause",
+        "rca",
+    },
+    "sdlc_phase": {
+        "sdlc phase (rca)",
+        "rca sdlc phase",
+        "sdlc phase introduced",
+        "phase introduced",
+        "introduced in phase",
+        "confirmed sdlc phase",
+    },
+    "testing_gap": {
+        "testing gap (rca)",
+        "rca testing gap",
+        "testing gap",
+        "confirmed testing gap",
+    },
+}
+
+
+def extract_confirmed_labels(
+    filename: str, content: bytes, *, max_rows: int = 5_000
+) -> tuple[dict[str, str], dict[int, dict[str, str]]]:
+    """Map defect ID -> confirmed RCA labels found in seed columns.
+
+    Returns (detected label columns, labels by ado_id). Rows without a root cause are
+    skipped; values are returned as text for the gateway to map onto taxonomy codes.
+    """
+    headers, rows = _read_rows(filename, content, max_rows)
+    by_key = {_header_key(header): header for header in headers}
+    id_header = next(
+        (by_key[key] for key in by_key if key == "ado_id" or key in _ALIASES["ado_id"]), None
+    )
+    columns: dict[str, str] = {}
+    for field, aliases in _CONFIRMED_ALIASES.items():
+        for alias in sorted(aliases, key=len, reverse=True):
+            if alias in by_key:
+                columns[field] = by_key[alias]
+                break
+    labels: dict[int, dict[str, str]] = {}
+    if id_header is None or "root_cause" not in columns:
+        return columns, labels
+    for row in rows[:max_rows]:
+        try:
+            ado_id = int(str(row.get(id_header)).strip())
+        except (TypeError, ValueError):
+            continue
+        values = {
+            field: str(row.get(header) or "").strip() for field, header in columns.items()
+        }
+        if values.get("root_cause"):
+            labels[ado_id] = {key: value for key, value in values.items() if value}
+    return columns, labels

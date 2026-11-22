@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, errorMessage, type JobStatus, type RcaView, type Taxonomy } from "./api";
+import {
+  api,
+  errorMessage,
+  type CaseView,
+  type JobStatus,
+  type KnowledgeStats,
+  type RcaView,
+  type Taxonomy,
+} from "./api";
 
 type DefectDetail = {
   ado_id: number;
@@ -59,12 +67,22 @@ export function Analysis({
   const [draft, setDraft] = useState({ root_cause_code: "", sdlc_phase_code: "", testing_gap_code: "" });
   const [note, setNote] = useState("");
 
+  const [knowledge, setKnowledge] = useState<KnowledgeStats | null>(null);
+
+  const loadKnowledge = useCallback(() => {
+    if (!projectId) return;
+    api<KnowledgeStats>(`/api/v1/projects/${encodeURIComponent(projectId)}/knowledge/stats`)
+      .then(setKnowledge)
+      .catch(() => setKnowledge(null));
+  }, [projectId]);
+
   useEffect(() => {
     if (!projectId) return;
     api<Taxonomy>(`/api/v1/projects/${encodeURIComponent(projectId)}/taxonomy`)
       .then(setTaxonomy)
       .catch(() => setTaxonomy(null));
-  }, [projectId]);
+    loadKnowledge();
+  }, [projectId, loadKnowledge]);
   const [rcas, setRcas] = useState<RcaView[]>([]);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState("");
@@ -184,14 +202,37 @@ export function Analysis({
       );
       setSelected(updated);
       setCorrecting(false);
-      setMessage(
-        updated.status === "APPROVED"
-          ? `#${updated.defect.ado_id} approved. It now counts in the dashboard trends.`
-          : `#${updated.defect.ado_id} corrected. The confirmed RCA now counts in the dashboard trends.`,
-      );
+      const kb =
+        (updated as RcaView & { knowledge_status?: string }).knowledge_status === "PENDING_EMBEDDING"
+          ? " It joins the knowledge base once embeddings are configured."
+          : " It is now in the knowledge base and the dashboard trends.";
+      setMessage(`#${updated.defect.ado_id} ${updated.status === "APPROVED" ? "approved" : "corrected"}.${kb}`);
       await loadRcas();
+      loadKnowledge();
     } catch (err) {
       setError(errorMessage(err, "Review failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function undoReview() {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const updated = await api<RcaView>(
+        `/api/v1/rcas/${encodeURIComponent(selected.id)}/reopen`,
+        { method: "POST", body: JSON.stringify({}) },
+        csrfToken,
+      );
+      setSelected(updated);
+      setMessage(`#${updated.defect.ado_id} reopened: removed from the knowledge base and trends.`);
+      await loadRcas();
+      loadKnowledge();
+    } catch (err) {
+      setError(errorMessage(err, "Reopen failed"));
     } finally {
       setBusy(false);
     }
@@ -233,6 +274,20 @@ export function Analysis({
         <button className="secondary" onClick={() => void loadRcas()} type="button">
           Refresh
         </button>
+        {knowledge && (
+          <span
+            className="kb-pill"
+            title={
+              knowledge.rag_enabled
+                ? `Embedding model ${knowledge.current_embedding_model}`
+                : "RAG is off until COHERE_API_KEY is configured"
+            }
+          >
+            Knowledge base: {knowledge.active} confirmed case{knowledge.active === 1 ? "" : "s"}
+            {knowledge.pending_embedding ? ` · ${knowledge.pending_embedding} pending` : ""}
+            {!knowledge.rag_enabled && " · RAG off"}
+          </span>
+        )}
         {canAnalyze && (
           <div className="analysis-actions">
             <button
@@ -399,6 +454,7 @@ export function Analysis({
               </p>
             </div>
           </div>
+          <SimilarCases rca={selected} />
           {selected.final && (
             <div className="final-box">
               <h3 className="column-title">Confirmed RCA · {STATUS_LABELS[selected.status]}</h3>
@@ -447,11 +503,22 @@ export function Analysis({
                 )}
                 <button className="secondary" disabled={busy || !taxonomy} onClick={() => startCorrection(selected)} type="button">
                   {selected.status === "APPROVED" || selected.status === "CORRECTED"
-                    ? "Reopen and correct"
+                    ? "Change confirmed RCA"
                     : selected.proposed
                       ? "Correct"
                       : "Classify manually"}
                 </button>
+                {(selected.status === "APPROVED" || selected.status === "CORRECTED") && (
+                  <button
+                    className="text-button"
+                    disabled={busy}
+                    onClick={() => void undoReview()}
+                    title="Back to the AI proposal; removes it from the knowledge base and trends"
+                    type="button"
+                  >
+                    Reopen (undo review)
+                  </button>
+                )}
               </div>
             )
           ) : (
@@ -468,6 +535,51 @@ function Field({ label, value }: { label: string; value: string }) {
     <div className="detail-field">
       <h3>{label}</h3>
       <p className="preserve-lines">{value || "—"}</p>
+    </div>
+  );
+}
+
+const RETRIEVAL_NOTES: Record<string, string> = {
+  DISABLED: "RAG is off (no embedding provider configured), so this proposal used no past cases.",
+  EMPTY_KNOWLEDGE_BASE: "The knowledge base was empty when this defect was analyzed.",
+  EMBED_DAILY_CAP_REACHED: "The daily embedding limit was reached, so no past cases were retrieved.",
+};
+
+function SimilarCases({ rca }: { rca: RcaView }) {
+  const retrieved = rca.retrieved_cases ?? [];
+  const cited = new Set((rca.cited_cases ?? []).map((item) => item.ref));
+  const status = rca.retrieval_status ?? "";
+  if (!rca.proposed && retrieved.length === 0) return null;
+  return (
+    <div className="cases-box">
+      <h3 className="column-title">Similar confirmed cases</h3>
+      {retrieved.length === 0 ? (
+        <p className="muted small-print">
+          {RETRIEVAL_NOTES[status] ??
+            (status && status !== "OK"
+              ? `Retrieval failed (${status}); the proposal used no past cases.`
+              : "No confirmed case was similar enough to this defect.")}
+        </p>
+      ) : (
+        <ul className="case-list">
+          {retrieved.map((item: CaseView) => (
+            <li className={cited.has(item.ref) ? "case cited" : "case"} key={item.ref}>
+              <div className="case-head">
+                <span className="case-id">#{item.defect_id}</span>
+                <span className="case-title">{item.title || "Untitled"}</span>
+                {cited.has(item.ref) && <span className="cited-pill">Cited by AI</span>}
+                <span className="case-score">{item.similarity != null ? `${Math.round(item.similarity * 100)}% similar` : ""}</span>
+              </div>
+              <p className="case-meta">
+                {item.root_cause?.label ?? "—"}
+                {item.testing_gap ? ` · ${item.testing_gap.label}` : ""}
+                {item.source === "SEED_IMPORT" ? " · seed import" : ""}
+              </p>
+              {item.summary && <p className="case-summary">{item.summary}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

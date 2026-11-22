@@ -110,18 +110,24 @@ async def summary(
     by: dict[str, Counter[str]] = {name: Counter() for name in DIMENSIONS}
     by_month_root: dict[str, Counter[str]] = defaultdict(Counter)
     corrected = 0
+    seeded = 0
     for fact in facts:
         for name, field in DIMENSIONS.items():
             by[name][str(fact.get(field) or "Unknown")] += 1
         by_month_root[str(fact.get("month") or "Unknown")][str(fact.get("root_cause_code"))] += 1
-        corrected += int(fact.get("status") == "CORRECTED")
+        if fact.get("source") == "SEED_IMPORT":
+            seeded += 1
+        else:
+            corrected += int(fact.get("status") == "CORRECTED")
 
     all_facts = await _facts(database, {"project_id": project_id})
+    reviewed = len(facts) - seeded  # AI agreement only counts QA decisions on AI proposals
     return {
         "total": len(facts),
-        "approved": len(facts) - corrected,
+        "approved": reviewed - corrected,
         "corrected": corrected,
-        "ai_agreement_rate": round((len(facts) - corrected) / len(facts), 4) if facts else None,
+        "seeded": seeded,
+        "ai_agreement_rate": round((reviewed - corrected) / reviewed, 4) if reviewed else None,
         "by_root_cause": _ranked(by["root_cause"]),
         "by_module": _ranked(by["module"]),
         "by_release": _ranked(by["release"]),

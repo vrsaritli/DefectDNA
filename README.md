@@ -237,3 +237,70 @@ palette, and each root cause keeps its colour when filters change.
 
 Exports and reviews are written to the audit log (`DATA_EXPORTED`, `RCA_APPROVED`,
 `RCA_CORRECTED`, `TRENDS_REBUILT`).
+## Phase 5 — Knowledge base and RAG (completed)
+
+The Phase 5 commit on `main` (`c611f28`) added the Cohere adapter, migration 005 and a
+retrieval test. This completes the phase:
+
+- **Grounded analysis (RAG):** before each analysis job the worker embeds every defect
+  (Cohere, `search_query`), retrieves the top-k approved knowledge entries **of the same
+  project** above the similarity threshold (Atlas `$vectorSearch`, with an in-process
+  cosine fallback for non-Atlas databases), and adds them to the prompt (`rca-v2`).
+  The model must list the cases it relied on; a citation of anything not retrieved for
+  that defect is rejected and retried, so cited IDs are always a subset of retrieved IDs.
+  If embedding or retrieval fails, analysis continues without cases and the reason is
+  recorded on the RCA (`retrieval_status`).
+- **Learning loop:** approving or correcting an RCA embeds the confirmed RCA
+  (`search_document`) and writes it to `knowledge_entries`. The embedding is computed
+  before any write, so a provider failure commits nothing (`502
+  EMBEDDING_PROVIDER_ERROR`, retryable); a failed knowledge write reverts the review.
+  Without `COHERE_API_KEY`, reviews still commit and entries wait as
+  `PENDING_EMBEDDING` until the re-embed job runs.
+- **Reopen:** `POST /rcas/{id}/reopen` returns a reviewed RCA to the AI proposal and
+  removes it from the knowledge base and trends. `"reopen": true` on a review changes
+  a confirmed RCA in place.
+- **Seed import:** QA Leads upload historical defects with a confirmed-RCA column
+  (`Root Cause (RCA)`; optional `SDLC Phase (RCA)` and `Testing Gap`) on the Import tab.
+  Defects are imported as usual, labels are mapped to taxonomy codes (by code or label;
+  "Code - Front-end" falls back to "Code"), and each becomes an approved RCA
+  (`review_source = SEED_IMPORT`) plus a knowledge entry. Unmapped labels are reported,
+  not guessed. A plain `SDLC Phase` column is ignored on purpose: in ADO exports it is
+  where the defect was found, not where it was introduced.
+- **Re-embed job:** `POST /projects/{id}/knowledge/reembed` (`{"force": true}` after an
+  embedding-model change) embeds pending entries and entries with a different model.
+- **Review screen:** shows the retrieved cases, highlights the ones the AI cited, and
+  shows the knowledge-base size and whether RAG is on.
+- Seeded RCAs count in trends but not in "AI agreement".
+
+### Setup
+
+1. Add `COHERE_API_KEY` to `.env` (optionally `COHERE_EMBED_MODEL`,
+   `COHERE_EMBED_DIMENSIONS`, `RAG_TOP_K`, `RAG_SIMILARITY_THRESHOLD`).
+2. Run `python migrations/005_knowledge_rag.py`. On Atlas it also creates the vector
+   index `knowledge_vector_index` (cosine, filters `project_id`, `status`, `module`).
+3. Restart the ai-knowledge-service and its worker. The worker log shows
+   `rag: enabled`.
+4. Seed the knowledge base (Import tab → **Seed confirmed RCAs**), then run analysis.
+
+### Endpoints
+
+| Method | Endpoint | Purpose | Min role |
+|---|---|---|---|
+| POST | `/projects/{pid}/knowledge/seed` | Seed import (multipart `file`) | QA Lead |
+| POST | `/projects/{pid}/knowledge/retrieve` | `{"text": "..."}`: cases a text would be grounded on | QA Lead |
+| GET | `/projects/{pid}/knowledge/stats` | Entry counts, pending embeddings, RAG on/off | Viewer |
+| POST | `/projects/{pid}/knowledge/reembed` | Re-embed job | QA Lead |
+| POST | `/rcas/{id}/reopen` (also `/projects/{pid}/rcas/{id}/reopen`) | Undo a review | QA Lead |
+
+`POST /projects/{pid}/rcas/{id}/review` is accepted as an alias of `/rcas/{id}/review`,
+and `{"action": ..., "correction": {...}}` bodies as in `POSTMAN_PHASE5.md`.
+
+### Golden set with and without RAG
+
+```bash
+python -m services.ai_knowledge_service.evals.run_golden_set          # no RAG
+python -m services.ai_knowledge_service.evals.run_golden_set --rag    # needs COHERE_API_KEY
+```
+
+`--rag` grounds each golden case on the *other* golden cases' confirmed labels
+(leave-one-out), never on its own label.

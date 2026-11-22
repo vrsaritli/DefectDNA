@@ -20,6 +20,11 @@ from libs.common.database import create_mongo_client
 from libs.common.logging import configure_logging
 from libs.common.queue import JobQueue, MongoJobQueue
 from libs.common.taxonomy import Taxonomy
+from services.ai_knowledge_service.app.adapters.embedding import (
+    EmbeddingAdapterError,
+    EmbeddingClient,
+    build_embedding_client,
+)
 from services.ai_knowledge_service.app.adapters.llm import GroqLLMClient, LLMClient
 from services.ai_knowledge_service.app.analysis import (
     AI_PROPOSED,
@@ -28,6 +33,11 @@ from services.ai_knowledge_service.app.analysis import (
     DailyCapReached,
     TokenBudget,
     analyze_defects,
+)
+from services.ai_knowledge_service.app.knowledge import (
+    REEMBED_JOB,
+    build_retriever,
+    reembed_entries,
 )
 from services.ai_knowledge_service.app.repository import (
     consume_llm_call,
@@ -55,6 +65,7 @@ async def process_analysis_job(
     llm: LLMClient,
     owner: str,
     settings: Settings,
+    embedder: EmbeddingClient | None = None,
 ) -> None:
     job_id = str(job["_id"])
     payload = job.get("payload", {})
@@ -154,6 +165,7 @@ async def process_analysis_job(
             budget=TokenBudget.from_settings(settings),
             acquire_call=acquire_call,
             on_batch_done=on_batch_done,
+            retriever=build_retriever(database, embedder, settings, project_id),
         )
     except _LeaseLost:
         log.warning("analysis_job_lease_lost", done=progress["done"])
@@ -179,6 +191,50 @@ async def process_analysis_job(
     await queue.complete(job_id, owner)
     await _drop_defect_text(database, job_id)
     log.info("analysis_job_finished", **progress)
+
+
+async def process_reembed_job(
+    job: dict[str, Any],
+    *,
+    database: AsyncIOMotorDatabase[dict[str, Any]],
+    queue: JobQueue,
+    embedder: EmbeddingClient,
+    owner: str,
+) -> None:
+    job_id = str(job["_id"])
+    payload = job.get("payload", {})
+    project_id = payload.get("project_id")
+
+    async def on_progress(done: int, total: int) -> None:
+        await queue.heartbeat(
+            job_id,
+            owner,
+            lease_seconds=LEASE_SECONDS,
+            set_fields={"payload.progress": {"total": total, "done": done, "failed": 0}},
+        )
+
+    try:
+        result = await reembed_entries(
+            database,
+            embedder,
+            project_id=str(project_id) if project_id else None,
+            force=bool(payload.get("force")),
+            on_progress=on_progress,
+        )
+    except EmbeddingAdapterError as exc:
+        await queue.fail(job_id, owner, exc.code)
+        logger.error("reembed_failed", job_id=job_id, code=exc.code)
+        return
+    await queue.heartbeat(
+        job_id,
+        owner,
+        lease_seconds=LEASE_SECONDS,
+        set_fields={
+            "payload.progress": {"total": result["total"], "done": result["embedded"], "failed": 0}
+        },
+    )
+    await queue.complete(job_id, owner)
+    logger.info("reembed_finished", job_id=job_id, project_id=project_id, **result)
 
 
 async def _drop_defect_text(database: AsyncIOMotorDatabase[dict[str, Any]], job_id: str) -> None:
@@ -208,10 +264,27 @@ async def run_worker(poll_seconds: float = 2.0) -> None:
         max_retries=settings.groq_max_retries,
         reasoning_effort=settings.groq_reasoning_effort or None,
     )
-    logger.info("analysis_worker_started", worker_id=owner, model=settings.groq_model)
+    embedder = build_embedding_client(settings)
+    logger.info(
+        "analysis_worker_started",
+        worker_id=owner,
+        model=settings.groq_model,
+        rag="enabled" if embedder else "disabled (no COHERE_API_KEY)",
+    )
     try:
         while True:
             job = await queue.claim(JOB_TYPE, owner, lease_seconds=LEASE_SECONDS)
+            if job is None and embedder is not None:
+                reembed = await queue.claim(REEMBED_JOB, owner, lease_seconds=LEASE_SECONDS)
+                if reembed is not None:
+                    try:
+                        await process_reembed_job(
+                            reembed, database=database, queue=queue, embedder=embedder, owner=owner
+                        )
+                    except Exception as exc:  # noqa: BLE001 - keep the worker alive
+                        logger.error("reembed_failed", error=type(exc).__name__)
+                        await queue.fail(str(reembed["_id"]), owner, type(exc).__name__)
+                    continue
             if job is None:
                 await asyncio.sleep(poll_seconds)
                 continue
@@ -229,6 +302,7 @@ async def run_worker(poll_seconds: float = 2.0) -> None:
                     llm=llm,
                     owner=owner,
                     settings=settings,
+                    embedder=embedder,
                 )
             except Exception as exc:  # noqa: BLE001 - keep the worker alive
                 logger.error("analysis_job_failed", job_id=job_id, error=type(exc).__name__)

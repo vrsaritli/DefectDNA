@@ -97,13 +97,14 @@ async def save_analysis(
                 "proposed": outcome.proposal.to_dict() if outcome.proposal else None,
                 "failure_reason": outcome.failure_reason,
                 "final": None,
-                "cited_cases": [],
-                "retrieved_cases": [],
+                "cited_cases": outcome.cited_cases,
+                "retrieved_cases": outcome.retrieved_cases,
+                "retrieval_status": outcome.retrieval_status,
                 "taxonomy_version": taxonomy_version,
                 "model": {
                     "llm": outcome.model,
                     "prompt_version": outcome.prompt_version,
-                    "embedding": None,
+                    "embedding": outcome.embedding_model,
                 },
                 "llm_attempts": outcome.llm_attempts,
                 "llm_batch": {
@@ -182,9 +183,10 @@ def build_trend_fact(rca: dict[str, Any]) -> dict[str, Any] | None:
         "month": snapshot.get("closed_month") or "Unknown",
         "severity": snapshot.get("severity") or "Unknown",
         "root_cause_code": final["root_cause_code"],
-        "sdlc_phase_code": final["sdlc_phase_code"],
-        "testing_gap_code": final["testing_gap_code"],
+        "sdlc_phase_code": final.get("sdlc_phase_code") or "Unknown",
+        "testing_gap_code": final.get("testing_gap_code") or "Unknown",
         "ai_root_cause_code": proposed.get("root_cause_code"),
+        "source": rca.get("review_source") or "REVIEW",
         "reviewed_at": reviewed_at.isoformat() if isinstance(reviewed_at, datetime) else reviewed_at,
     }
 
