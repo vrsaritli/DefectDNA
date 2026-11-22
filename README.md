@@ -190,3 +190,50 @@ python -m services.ai_knowledge_service.evals.run_golden_set
 
 See [services/ai_knowledge_service/evals/README.md](services/ai_knowledge_service/evals/README.md)
 for the baseline and how to read it.
+## Phase 6 — Trends, dashboard and export
+
+Phase 6 turns reviewed RCAs into trends. It also adds the approve/correct step that
+trends depend on: Phase 5 on `main` did not yet include one. The knowledge-base write
+(embedding the confirmed RCA) still belongs to Phase 5 and plugs into the same review
+commit.
+
+**Flow:** a QA Lead approves or corrects an RCA on **AI analysis** →
+`POST /api/v1/rcas/{id}/review` → the ai-knowledge-service stores the confirmed RCA
+and enqueues a `trend_fact` job → the trends worker upserts one `trend_facts` document
+per defect → the **Dashboard** tab aggregates them. Counts include approved and
+corrected RCAs only. A correction that keeps the AI's codes counts as approved, so
+"AI agreement" means "QA kept the AI's answer".
+
+### Setup
+
+```bash
+python migrations/006_trends.py
+uvicorn services.trends_service.app.main:app --reload --port 8003
+python -m services.trends_service.app.worker
+```
+
+Set `TRENDS_SERVICE_URL` if the trends-service is not on port 8003. To load RCAs that
+were reviewed before the worker ran (or to reconcile), click **Rebuild** on the
+dashboard or call `POST /api/v1/projects/{id}/trends/rebuild`.
+
+### Dashboard
+
+Stat cards (reviewed RCAs, AI agreement, top root cause, most affected module), a
+monthly stacked bar chart of root causes, ranked lists for modules, root causes,
+testing gaps and SDLC phases, and a breakdown table grouped by module, release, month,
+testing gap or SDLC phase. Filters: module, release and month range. The layout follows
+the shadcn-admin overview pattern; chart colours use a CVD-validated categorical
+palette, and each root cause keeps its colour when filters change.
+
+### New endpoints
+
+| Method | Endpoint | Purpose | Min role |
+|---|---|---|---|
+| POST | `/rcas/{rca_id}/review` | `{"decision": "APPROVE"}` or `{"decision": "CORRECT", "final": {...}, "note": "..."}`; `"reopen": true` to change a reviewed RCA | QA Lead |
+| GET | `/projects/{pid}/trends?group_by=module,month` | Counts with root-cause breakdown; filters `module`, `release`, `month_from`, `month_to`, `root_cause`, `testing_gap`, `severity` | Viewer |
+| GET | `/projects/{pid}/trends/summary` | Dashboard data (same filters) | Viewer |
+| POST | `/projects/{pid}/trends/rebuild` | Re-derive trend facts from all reviewed RCAs | QA Lead |
+| GET | `/projects/{pid}/export?type=defects\|rcas\|trends&format=csv\|xlsx` | Download; cells starting with `= + - @` are neutralised; capped at `EXPORT_MAX_ROWS` | Viewer |
+
+Exports and reviews are written to the audit log (`DATA_EXPORTED`, `RCA_APPROVED`,
+`RCA_CORRECTED`, `TRENDS_REBUILT`).

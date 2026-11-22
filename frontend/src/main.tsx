@@ -2,7 +2,32 @@ import { type FormEvent, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 import { Analysis } from "./Analysis";
+import { Dashboard } from "./Dashboard";
 import { api, type RcaView } from "./api";
+
+type Screen = "dashboard" | "import" | "defects" | "analysis";
+const SCREENS: Record<Screen, { eyebrow: string; title: string; description: string }> = {
+  dashboard: {
+    eyebrow: "QUALITY INSIGHTS",
+    title: "Root-cause trends",
+    description: "Recurring root causes by module, release and month, from reviewed RCAs.",
+  },
+  import: {
+    eyebrow: "DEFECT OPERATIONS",
+    title: "Import defects",
+    description: "Bring in a CSV or Excel export, validate rows, and review the import.",
+  },
+  defects: {
+    eyebrow: "DEFECT OPERATIONS",
+    title: "Defect register",
+    description: "Browse imported defects and inspect their source details.",
+  },
+  analysis: {
+    eyebrow: "AI ROOT-CAUSE ANALYSIS",
+    title: "AI analysis and review",
+    description: "Run AI analysis on closed defects, then approve or correct each proposed root cause.",
+  },
+};
 
 type Project = { id: string; name: string; role: string };
 type Defect = {
@@ -25,7 +50,7 @@ function App() {
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
-  const [screen, setScreen] = useState<"import" | "defects" | "analysis">("import");
+  const [screen, setScreen] = useState<Screen>("dashboard");
   const [selectedRca, setSelectedRca] = useState<RcaView | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState("");
@@ -284,25 +309,21 @@ function App() {
 
       <section className="page-heading">
         <div>
-          <p className="eyebrow">DEFECT OPERATIONS</p>
-          <h1>
-            {screen === "import"
-              ? "Import defects"
-              : screen === "defects"
-                ? "Defect register"
-                : "AI root-cause analysis"}
-          </h1>
-          <p className="muted">
-            {screen === "import"
-              ? "Bring in a CSV or Excel export, validate rows, and review the import."
-              : screen === "defects"
-                ? "Browse imported defects and inspect their source details."
-                : "Run AI analysis on closed defects and review each proposed root cause."}
-          </p>
+          <p className="eyebrow">{SCREENS[screen].eyebrow}</p>
+          <h1>{SCREENS[screen].title}</h1>
+          <p className="muted">{SCREENS[screen].description}</p>
         </div>
       </section>
 
       <nav aria-label="Main navigation" className="tabs">
+        <button
+          aria-current={screen === "dashboard" ? "page" : undefined}
+          className={screen === "dashboard" ? "tab active" : "tab"}
+          onClick={() => setScreen("dashboard")}
+          type="button"
+        >
+          Dashboard
+        </button>
         <button
           aria-current={screen === "import" ? "page" : undefined}
           className={screen === "import" ? "tab active" : "tab"}
@@ -331,8 +352,15 @@ function App() {
 
       {message && <p className="notice">{message}</p>}
 
-      {screen === "analysis" ? (
-        <Analysis canAnalyze={canImport} csrfToken={csrfToken} projectId={projectId} />
+      {screen === "dashboard" ? (
+        <Dashboard canRebuild={canImport} csrfToken={csrfToken} projectId={projectId} />
+      ) : screen === "analysis" ? (
+        <Analysis
+          canAnalyze={canImport}
+          canReview={selectedProject?.role === "QA_LEAD"}
+          csrfToken={csrfToken}
+          projectId={projectId}
+        />
       ) : screen === "import" ? (
         <section className="content-card">
           {canImport ? (
@@ -525,7 +553,7 @@ function App() {
           </div>
         </section>
       )}
-      <footer>DefectDNA · Phase 4 AI RCA</footer>
+      <footer>DefectDNA · Phase 6 trends and export</footer>
     </main>
   );
 }

@@ -8,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from libs.common.config import Settings
 from libs.common.database import create_mongo_client, ping_database
 from libs.common.logging import configure_logging
+from services.trends_service.app.api import router as trends_router
 
 settings = Settings()
 configure_logging("trends-service")
@@ -19,12 +20,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global mongo_client
     if settings.mongodb_uri:
         mongo_client = create_mongo_client(settings.mongodb_uri)
+    app.state.mongo_client = mongo_client
     yield
     if mongo_client:
         mongo_client.close()
+        mongo_client = None
+    app.state.mongo_client = None
 
 
 app = FastAPI(title="DefectDNA Trends Service", lifespan=lifespan)
+app.include_router(trends_router)
 
 
 @app.get("/health")

@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     rate_limit_requests_per_minute: int = Field(default=120, ge=1, le=10_000)
     env: str = "dev"
     ai_knowledge_service_url: str = "http://127.0.0.1:8002"
+    trends_service_url: str = "http://127.0.0.1:8003"
+    export_max_rows: int = Field(default=10_000, ge=1, le=100_000)
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
     groq_base_url: str = "https://api.groq.com/openai/v1"

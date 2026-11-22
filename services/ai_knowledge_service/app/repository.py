@@ -1,5 +1,6 @@
 """Data access for collections owned by the ai-knowledge-service."""
 
+import math
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
@@ -161,3 +162,75 @@ def serialize_rca(doc: dict[str, Any]) -> dict[str, Any]:
         if isinstance(result.get(key), ObjectId):
             result[key] = str(result[key])
     return result
+
+
+def build_trend_fact(rca: dict[str, Any]) -> dict[str, Any] | None:
+    """Trend-fact payload for a reviewed RCA (None if it is not reviewed)."""
+    final = rca.get("final") or {}
+    if rca.get("status") not in REVIEWED_STATUSES or not final.get("root_cause_code"):
+        return None
+    snapshot = rca.get("defect_snapshot") or {}
+    proposed = rca.get("proposed") or {}
+    reviewed_at = rca.get("reviewed_at")
+    return {
+        "project_id": rca["project_id"],
+        "defect_id": int(rca["defect_id"]),
+        "rca_id": str(rca["_id"]),
+        "status": rca["status"],
+        "module": snapshot.get("module") or "Unknown",
+        "release": snapshot.get("release") or "Unknown",
+        "month": snapshot.get("closed_month") or "Unknown",
+        "severity": snapshot.get("severity") or "Unknown",
+        "root_cause_code": final["root_cause_code"],
+        "sdlc_phase_code": final["sdlc_phase_code"],
+        "testing_gap_code": final["testing_gap_code"],
+        "ai_root_cause_code": proposed.get("root_cause_code"),
+        "reviewed_at": reviewed_at.isoformat() if isinstance(reviewed_at, datetime) else reviewed_at,
+    }
+
+
+async def reviewed_trend_facts(
+    database: AsyncIOMotorDatabase[dict[str, Any]], project_id: str
+) -> list[dict[str, Any]]:
+    """Facts for the latest version of every reviewed RCA in the project."""
+    latest: dict[int, dict[str, Any]] = {}
+    async for doc in database["rca_analyses"].find({"project_id": project_id}):
+        current = latest.get(doc["defect_id"])
+        if current is None or doc["version"] > current["version"]:
+            latest[doc["defect_id"]] = doc
+    facts = [build_trend_fact(doc) for doc in latest.values()]
+    return [fact for fact in facts if fact is not None]
+
+
+def _cosine(left: list[float], right: list[float]) -> float:
+    if len(left) != len(right) or not left:
+        return 0.0
+    dot = sum(a * b for a, b in zip(left, right, strict=True))
+    norm = math.sqrt(sum(a * a for a in left)) * math.sqrt(sum(b * b for b in right))
+    return dot / norm if norm else 0.0
+
+
+async def retrieve_knowledge(
+    database: AsyncIOMotorDatabase[dict[str, Any]],
+    *,
+    project_id: str,
+    query_embedding: list[float],
+    top_k: int,
+    threshold: float,
+) -> list[dict[str, Any]]:
+    """Project-scoped nearest approved knowledge entries (cosine similarity).
+
+    In-process fallback for development and tests; production retrieval should use the
+    Atlas ``$vectorSearch`` index created for Phase 5.
+    """
+    scored = []
+    async for entry in database["knowledge_entries"].find(
+        {"project_id": project_id, "status": "ACTIVE"}
+    ):
+        score = _cosine(list(entry.get("embedding") or []), query_embedding)
+        if score >= threshold:
+            entry.pop("embedding", None)
+            entry["score"] = round(score, 6)
+            scored.append(entry)
+    scored.sort(key=lambda entry: -entry["score"])
+    return scored[:top_k]

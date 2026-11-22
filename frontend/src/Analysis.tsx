@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, errorMessage, type JobStatus, type RcaView } from "./api";
+import { api, errorMessage, type JobStatus, type RcaView, type Taxonomy } from "./api";
 
 type DefectDetail = {
   ado_id: number;
@@ -46,12 +46,25 @@ function commentsText(value: DefectDetail["comments"]): string {
 export function Analysis({
   projectId,
   canAnalyze,
+  canReview,
   csrfToken,
 }: {
   projectId: string;
   canAnalyze: boolean;
+  canReview: boolean;
   csrfToken: string;
 }) {
+  const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
+  const [correcting, setCorrecting] = useState(false);
+  const [draft, setDraft] = useState({ root_cause_code: "", sdlc_phase_code: "", testing_gap_code: "" });
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    if (!projectId) return;
+    api<Taxonomy>(`/api/v1/projects/${encodeURIComponent(projectId)}/taxonomy`)
+      .then(setTaxonomy)
+      .catch(() => setTaxonomy(null));
+  }, [projectId]);
   const [rcas, setRcas] = useState<RcaView[]>([]);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState("");
@@ -139,9 +152,55 @@ export function Analysis({
     }
   }
 
+  function startCorrection(rca: RcaView) {
+    const source = rca.final ?? rca.proposed;
+    setDraft({
+      root_cause_code: source?.root_cause?.code ?? "",
+      sdlc_phase_code: source?.sdlc_phase?.code ?? "",
+      testing_gap_code: source?.testing_gap?.code ?? "",
+    });
+    setNote(rca.final?.note ?? "");
+    setCorrecting(true);
+  }
+
+  async function submitReview(decision: "APPROVE" | "CORRECT") {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    const reopen = selected.status === "APPROVED" || selected.status === "CORRECTED";
+    try {
+      const updated = await api<RcaView>(
+        `/api/v1/rcas/${encodeURIComponent(selected.id)}/review`,
+        {
+          method: "POST",
+          body: JSON.stringify(
+            decision === "APPROVE"
+              ? { decision, reopen }
+              : { decision, reopen, final: draft, note: note.trim() || null },
+          ),
+        },
+        csrfToken,
+      );
+      setSelected(updated);
+      setCorrecting(false);
+      setMessage(
+        updated.status === "APPROVED"
+          ? `#${updated.defect.ado_id} approved. It now counts in the dashboard trends.`
+          : `#${updated.defect.ado_id} corrected. The confirmed RCA now counts in the dashboard trends.`,
+      );
+      await loadRcas();
+    } catch (err) {
+      setError(errorMessage(err, "Review failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openRca(rca: RcaView) {
     setSelected(rca);
     setDefect(null);
+    setCorrecting(false);
     try {
       const [detail, fresh] = await Promise.all([
         api<{ defect: DefectDetail }>(
@@ -266,7 +325,7 @@ export function Analysis({
         <div className="review-panel">
           <div className="detail-heading">
             <div>
-              <p className="eyebrow">RCA REVIEW · READ-ONLY</p>
+              <p className="eyebrow">RCA REVIEW</p>
               <h2>
                 #{selected.defect.ado_id} {selected.defect.title}
               </h2>
@@ -340,7 +399,64 @@ export function Analysis({
               </p>
             </div>
           </div>
-          <p className="notice">Approve and correct actions arrive in Phase 5. This view shows the AI proposal only.</p>
+          {selected.final && (
+            <div className="final-box">
+              <h3 className="column-title">Confirmed RCA · {STATUS_LABELS[selected.status]}</h3>
+              <div className="final-grid">
+                <Classification label="Root cause" value={selected.final.root_cause} />
+                <Classification label="SDLC phase introduced" value={selected.final.sdlc_phase} />
+                <Classification label="Testing gap" value={selected.final.testing_gap} />
+              </div>
+              {selected.final.note && <Field label="Reviewer note" value={selected.final.note} />}
+            </div>
+          )}
+
+          {canReview ? (
+            correcting && taxonomy ? (
+              <div className="review-form">
+                <h3 className="column-title">Correct the RCA</h3>
+                <div className="review-form-grid">
+                  <CodeSelect label="Root cause" items={taxonomy.root_causes} value={draft.root_cause_code} onChange={(value) => setDraft({ ...draft, root_cause_code: value })} />
+                  <CodeSelect label="SDLC phase introduced" items={taxonomy.sdlc_phases} value={draft.sdlc_phase_code} onChange={(value) => setDraft({ ...draft, sdlc_phase_code: value })} />
+                  <CodeSelect label="Testing gap" items={taxonomy.testing_gaps} value={draft.testing_gap_code} onChange={(value) => setDraft({ ...draft, testing_gap_code: value })} />
+                </div>
+                <label>
+                  Note (optional)
+                  <textarea maxLength={2000} onChange={(event) => setNote(event.target.value)} rows={2} value={note} />
+                </label>
+                <div className="review-buttons">
+                  <button
+                    className="primary"
+                    disabled={busy || !draft.root_cause_code || !draft.sdlc_phase_code || !draft.testing_gap_code}
+                    onClick={() => void submitReview("CORRECT")}
+                    type="button"
+                  >
+                    Save confirmed RCA
+                  </button>
+                  <button className="text-button" onClick={() => setCorrecting(false)} type="button">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="review-buttons">
+                {selected.proposed && (selected.status === "AI_PROPOSED" || selected.status === "NEEDS_MANUAL_RCA") && (
+                  <button className="primary" disabled={busy} onClick={() => void submitReview("APPROVE")} type="button">
+                    Approve AI proposal
+                  </button>
+                )}
+                <button className="secondary" disabled={busy || !taxonomy} onClick={() => startCorrection(selected)} type="button">
+                  {selected.status === "APPROVED" || selected.status === "CORRECTED"
+                    ? "Reopen and correct"
+                    : selected.proposed
+                      ? "Correct"
+                      : "Classify manually"}
+                </button>
+              </div>
+            )
+          ) : (
+            <p className="notice">Only a QA Lead on this project can approve or correct RCAs.</p>
+          )}
         </div>
       )}
     </section>
@@ -353,6 +469,34 @@ function Field({ label, value }: { label: string; value: string }) {
       <h3>{label}</h3>
       <p className="preserve-lines">{value || "—"}</p>
     </div>
+  );
+}
+
+function CodeSelect({
+  label,
+  items,
+  value,
+  onChange,
+}: {
+  label: string;
+  items: { code: string; label: string; definition?: string }[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const definition = items.find((item) => item.code === value)?.definition;
+  return (
+    <label>
+      {label}
+      <select onChange={(event) => onChange(event.target.value)} value={value}>
+        <option value="">Choose…</option>
+        {items.map((item) => (
+          <option key={item.code} value={item.code}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+      {definition && <span className="field-help">{definition}</span>}
+    </label>
   );
 }
 

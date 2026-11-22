@@ -2,7 +2,7 @@
 
 import re
 from datetime import UTC, datetime
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, Literal, cast
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -13,12 +13,15 @@ from pydantic import BaseModel, Field
 from libs.common.config import settings
 from libs.common.queue import MongoJobQueue
 from libs.common.service_auth import verify_service_token
-from libs.common.taxonomy import Taxonomy
+from libs.common.taxonomy import Taxonomy, TaxonomyKind
+from libs.common.trends import TREND_FACT_JOB
 from services.ai_knowledge_service.app.repository import (
     RCA_STATUSES,
     REVIEWED_STATUSES,
+    build_trend_fact,
     find_latest_for_defect,
     latest_by_defect,
+    reviewed_trend_facts,
     serialize_rca,
 )
 from services.ai_knowledge_service.app.worker import JOB_TYPE
@@ -210,3 +213,115 @@ async def get_defect_rca(
     _validate_project_id(project_id)
     doc = await find_latest_for_defect(_database(request), project_id, defect_id)
     return {"rca": serialize_rca(doc) if doc else None}
+
+
+class FinalClassification(BaseModel):
+    root_cause_code: str = Field(min_length=1, max_length=64)
+    sdlc_phase_code: str = Field(min_length=1, max_length=64)
+    testing_gap_code: str = Field(min_length=1, max_length=64)
+
+
+class ReviewRequest(BaseModel):
+    decision: Literal["APPROVE", "CORRECT"]
+    final: FinalClassification | None = None
+    note: str | None = Field(default=None, max_length=2_000)
+    reviewer_id: str = Field(min_length=1, max_length=64)
+    reopen: bool = False
+    taxonomy: Taxonomy
+
+
+_CODE_FIELDS: dict[str, TaxonomyKind] = {
+    "root_cause_code": "root_causes",
+    "sdlc_phase_code": "sdlc_phases",
+    "testing_gap_code": "testing_gaps",
+}
+
+
+@router.post("/internal/rcas/{rca_id}/review")
+async def review_rca(
+    request: Request,
+    rca_id: str,
+    body: ReviewRequest,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Commit a QA Lead decision and emit a trend fact.
+
+    Phase 5 extends this commit with the knowledge-entry (embedding) write.
+    """
+    _require_gateway(authorization)
+    try:
+        object_id = ObjectId(rca_id)
+    except (InvalidId, TypeError) as exc:
+        raise HTTPException(status_code=404, detail={"code": "RCA_NOT_FOUND"}) from exc
+    database = _database(request)
+    rca = await database["rca_analyses"].find_one({"_id": object_id})
+    if rca is None:
+        raise HTTPException(status_code=404, detail={"code": "RCA_NOT_FOUND"})
+    if rca["status"] in REVIEWED_STATUSES and not body.reopen:
+        raise HTTPException(status_code=409, detail={"code": "ALREADY_REVIEWED"})
+    if body.taxonomy.version != rca.get("taxonomy_version"):
+        raise HTTPException(status_code=409, detail={"code": "TAXONOMY_VERSION_MISMATCH"})
+
+    proposed = rca.get("proposed") or {}
+    proposed_codes = {name: proposed.get(name) for name in _CODE_FIELDS}
+    if body.decision == "APPROVE":
+        if not proposed:
+            raise HTTPException(status_code=422, detail={"code": "NOTHING_TO_APPROVE"})
+        final_codes = proposed_codes
+    else:
+        if body.final is None:
+            raise HTTPException(status_code=422, detail={"code": "FINAL_REQUIRED"})
+        final_codes = body.final.model_dump()
+        for name, kind in _CODE_FIELDS.items():
+            if final_codes[name] not in body.taxonomy.codes(kind):
+                raise HTTPException(status_code=422, detail={"code": "UNKNOWN_TAXONOMY_CODE"})
+    status = "APPROVED" if proposed and final_codes == proposed_codes else "CORRECTED"
+
+    now = datetime.now(UTC)
+    result = await database["rca_analyses"].update_one(
+        {"_id": object_id, "status": rca["status"]},
+        {
+            "$set": {
+                "status": status,
+                "final": {**final_codes, "note": (body.note or "").strip() or None},
+                "reviewer_id": ObjectId(body.reviewer_id)
+                if ObjectId.is_valid(body.reviewer_id)
+                else body.reviewer_id,
+                "reviewed_at": now,
+                "updated_at": now,
+            }
+        },
+    )
+    if result.modified_count != 1:
+        raise HTTPException(status_code=409, detail={"code": "CONCURRENT_REVIEW"})
+    updated = await database["rca_analyses"].find_one({"_id": object_id})
+    assert updated is not None
+    fact = build_trend_fact(updated)
+    trend_job_id = (
+        await MongoJobQueue(database).enqueue(
+            TREND_FACT_JOB, {"project_id": updated["project_id"], "fact": fact}
+        )
+        if fact
+        else None
+    )
+    return {
+        "id": rca_id,
+        "project_id": updated["project_id"],
+        "defect_id": updated["defect_id"],
+        "status": status,
+        "previous_status": rca["status"],
+        "final": updated["final"],
+        "reviewed_at": now,
+        "trend_job_id": trend_job_id,
+    }
+
+
+@router.get("/internal/projects/{project_id}/reviewed-facts")
+async def reviewed_facts(
+    request: Request,
+    project_id: str,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    _require_gateway(authorization)
+    _validate_project_id(project_id)
+    return {"facts": await reviewed_trend_facts(_database(request), project_id)}

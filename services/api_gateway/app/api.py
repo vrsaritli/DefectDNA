@@ -242,6 +242,23 @@ async def _call_ingestion(
     )
 
 
+async def _call_trends(
+    method: str,
+    path: str,
+    *,
+    params: dict[str, Any] | None = None,
+    json_body: Any = None,
+) -> tuple[int, dict[str, Any]]:
+    return await _call_internal_service(
+        settings.trends_service_url,
+        "TRENDS",
+        method,
+        path,
+        params=params,
+        json_body=json_body,
+    )
+
+
 async def _call_ai_knowledge(
     method: str,
     path: str,

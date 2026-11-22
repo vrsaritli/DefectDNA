@@ -21,7 +21,8 @@ export type RcaView = {
   id: string;
   status: "AI_PROPOSED" | "NEEDS_MANUAL_RCA" | "APPROVED" | "CORRECTED";
   version: number;
-  final?: { root_cause: Coded; sdlc_phase: Coded; testing_gap: Coded; confidence: number; rationale: string; other_proposal?: string | null } | null;
+  final?: { root_cause: Coded; sdlc_phase: Coded; testing_gap: Coded; note?: string | null } | null;
+  reviewed_at?: string | null;
   cited_cases?: { id: string; defect_id: number; title?: string; final?: Record<string, unknown> }[];
   retrieved_cases?: string[];
   defect: { ado_id: number; title?: string; module?: string; release?: string; severity?: string; closed_month?: string | null };
@@ -33,6 +34,14 @@ export type RcaView = {
   llm_batch: { size?: number; usage?: Record<string, number> };
   scrub_counts: Record<string, number>;
   analyzed_at: string | null;
+};
+
+export type TaxonomyItem = { code: string; label: string; definition?: string };
+export type Taxonomy = {
+  version: number;
+  root_causes: TaxonomyItem[];
+  sdlc_phases: TaxonomyItem[];
+  testing_gaps: TaxonomyItem[];
 };
 
 export type JobStatus = {

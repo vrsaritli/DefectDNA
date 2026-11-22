@@ -711,3 +711,349 @@ footer {
     margin-left: 0;
   }
 }
+/* Phase 6: dashboard (layout pattern from shadcn-admin's overview: stat cards,
+   wide chart card beside a ranked list, breakdown table) */
+.dashboard {
+  display: grid;
+  gap: 16px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+  background: #fff;
+  box-shadow: 0 1px 2px #1c344508, 0 8px 24px #1c34450a;
+}
+
+.card h2 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.card-head .muted {
+  margin: 3px 0 0;
+  font-size: 12px;
+}
+
+.dash-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dash-filters,
+.dash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+
+.dash-filters label,
+.inline-select {
+  display: grid;
+  gap: 5px;
+  color: #52514e;
+  font-size: 12px;
+}
+
+.dash-filters select,
+.dash-filters input,
+.dash-actions select,
+.inline-select select,
+.review-form select {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #fff;
+  color: #172635;
+}
+
+.dash-filters select {
+  min-width: 170px;
+  max-width: 230px;
+}
+
+.dash-actions .primary,
+.dash-actions .secondary {
+  min-height: 38px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  display: grid;
+  gap: 6px;
+  padding: 18px 20px;
+}
+
+.stat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #52514e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stat-head svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.stat-value {
+  overflow: hidden;
+  color: #0b0b0b;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.chart-grid .span-2 {
+  grid-column: span 2;
+}
+
+.chart-box {
+  width: 100%;
+  min-height: 300px;
+}
+
+.legend-text {
+  color: #52514e;
+}
+
+.chart-tooltip {
+  display: grid;
+  min-width: 180px;
+  gap: 4px;
+  border: 1px solid rgba(11, 11, 11, 0.1);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px #1c34451f;
+  font-size: 12px;
+}
+
+.chart-tooltip .muted {
+  margin-bottom: 4px;
+}
+
+.tooltip-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  color: #52514e;
+}
+
+.tooltip-row .num {
+  color: #0b0b0b;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  flex: none;
+  margin-right: 6px;
+  border-radius: 50%;
+}
+
+.tooltip-row .swatch {
+  margin-right: 0;
+}
+
+.ranked-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ranked-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+  font-size: 13px;
+}
+
+.ranked-label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  overflow: hidden;
+  color: #172635;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranked-value {
+  flex: none;
+  color: #0b0b0b;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.ranked-value .muted {
+  font-weight: 400;
+}
+
+.ranked-track {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: #eef1f3;
+}
+
+.ranked-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #2a78d6;
+}
+
+.ranked-list li:hover .ranked-fill {
+  filter: brightness(0.92);
+}
+
+.numeric-table th.num,
+.numeric-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.numeric-table td.strong {
+  color: #0b0b0b;
+  font-weight: 700;
+}
+
+.numeric-table .zero {
+  color: #c3c2b7;
+}
+
+.numeric-table th .swatch {
+  width: 7px;
+  height: 7px;
+  vertical-align: middle;
+}
+
+.empty-dashboard {
+  padding: 36px 26px;
+  text-align: center;
+}
+
+.empty-dashboard p {
+  max-width: 520px;
+  margin: 8px auto 0;
+}
+
+/* Review actions on the AI analysis screen */
+.final-box {
+  margin-top: 18px;
+  border: 1px solid #d8ebdf;
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: #f6fbf8;
+}
+
+.final-grid,
+.review-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.review-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  background: #fff;
+}
+
+.review-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.review-form textarea {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.review-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+@media (max-width: 1000px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chart-grid .span-2 {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .stat-grid,
+  .final-grid,
+  .review-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dash-filters select {
+    min-width: 0;
+    width: 100%;
+  }
+}
