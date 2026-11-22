@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import { Analysis } from "./Analysis";
+import { api, type RcaView } from "./api";
 
 type Project = { id: string; name: string; role: string };
 type Defect = {
@@ -15,33 +17,6 @@ type Defect = {
   repro_steps: string;
   tags: string[];
 };
-type ApiError = { error?: { message?: string; code?: string } };
-
-async function api<T>(
-  path: string,
-  options: RequestInit = {},
-  csrfToken?: string,
-): Promise<T> {
-  const headers = new Headers(options.headers);
-  if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
-  if (options.body && !(options.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
-  }
-  const response = await fetch(path, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
-  const raw = await response.text();
-  const payload = (raw ? JSON.parse(raw) : {}) as T & ApiError;
-  if (!response.ok) {
-    throw new Error(
-      payload.error?.message ?? payload.error?.code ?? `Request failed (${response.status})`,
-    );
-  }
-  return payload;
-}
-
 function App() {
   const [csrfToken, setCsrfToken] = useState("");
   const [username, setUsername] = useState("");
@@ -50,7 +25,8 @@ function App() {
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
-  const [screen, setScreen] = useState<"import" | "defects">("import");
+  const [screen, setScreen] = useState<"import" | "defects" | "analysis">("import");
+  const [selectedRca, setSelectedRca] = useState<RcaView | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState("");
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
@@ -206,10 +182,11 @@ function App() {
     setBusy(true);
     setMessage("");
     try {
-      const response = await api<{ defect: Defect }>(
+      const response = await api<{ defect: Defect; rca: RcaView | null }>(
         `/api/v1/projects/${encodeURIComponent(projectId)}/defects/${adoId}`,
       );
       setSelectedDefect(response.defect);
+      setSelectedRca(response.rca);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load defect");
     } finally {
@@ -308,11 +285,19 @@ function App() {
       <section className="page-heading">
         <div>
           <p className="eyebrow">DEFECT OPERATIONS</p>
-          <h1>{screen === "import" ? "Import defects" : "Defect register"}</h1>
+          <h1>
+            {screen === "import"
+              ? "Import defects"
+              : screen === "defects"
+                ? "Defect register"
+                : "AI root-cause analysis"}
+          </h1>
           <p className="muted">
             {screen === "import"
               ? "Bring in a CSV or Excel export, validate rows, and review the import."
-              : "Browse imported defects and inspect their source details."}
+              : screen === "defects"
+                ? "Browse imported defects and inspect their source details."
+                : "Run AI analysis on closed defects and review each proposed root cause."}
           </p>
         </div>
       </section>
@@ -334,11 +319,21 @@ function App() {
         >
           Defects
         </button>
+        <button
+          aria-current={screen === "analysis" ? "page" : undefined}
+          className={screen === "analysis" ? "tab active" : "tab"}
+          onClick={() => setScreen("analysis")}
+          type="button"
+        >
+          AI analysis
+        </button>
       </nav>
 
       {message && <p className="notice">{message}</p>}
 
-      {screen === "import" ? (
+      {screen === "analysis" ? (
+        <Analysis canAnalyze={canImport} csrfToken={csrfToken} projectId={projectId} />
+      ) : screen === "import" ? (
         <section className="content-card">
           {canImport ? (
             <>
@@ -513,12 +508,24 @@ function App() {
                   label="Tags"
                   value={(selectedDefect.tags ?? []).join(", ")}
                 />
+                <DetailField
+                  label="AI root cause"
+                  value={
+                    selectedRca?.proposed
+                      ? `${selectedRca.proposed.root_cause?.label ?? "—"} · ${Math.round(
+                          selectedRca.proposed.confidence * 100,
+                        )}% confidence (see AI analysis)`
+                      : selectedRca
+                        ? `Needs manual RCA (${selectedRca.failure_reason ?? "unknown"})`
+                        : "Not analyzed yet"
+                  }
+                />
               </aside>
             )}
           </div>
         </section>
       )}
-      <footer>DefectDNA · Phase 3 ingestion</footer>
+      <footer>DefectDNA · Phase 4 AI RCA</footer>
     </main>
   );
 }

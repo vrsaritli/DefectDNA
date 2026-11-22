@@ -9,6 +9,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Request, UploadFile
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel, Field
 
 from libs.common.config import settings
 from libs.common.service_auth import verify_service_token
@@ -304,6 +305,62 @@ async def list_defects(
     )
     defects = [_serialize_defect(doc) for doc in await cursor.to_list(length=page_size)]
     return {"page": page, "page_size": page_size, "total": total, "defects": defects}
+
+
+_ANALYZABLE_STATES = ("Closed", "Resolved", "Done")
+_ANALYSIS_FIELDS = {
+    "_id": 0,
+    "ado_id": 1,
+    "title": 1,
+    "description": 1,
+    "repro_steps": 1,
+    "comments": 1,
+    "module": 1,
+    "release": 1,
+    "severity": 1,
+    "priority": 1,
+    "state": 1,
+    "tags": 1,
+    "closed_date": 1,
+}
+
+
+class DefectsForAnalysisRequest(BaseModel):
+    ado_ids: list[int] | None = Field(default=None, max_length=1_000)
+    exclude_ids: list[int] = Field(default_factory=list, max_length=100_000)
+    limit: int = Field(default=200, ge=1, le=1_000)
+
+
+@router.post("/internal/projects/{project_id}/defects/for-analysis")
+async def defects_for_analysis(
+    request: Request,
+    project_id: str,
+    body: DefectsForAnalysisRequest,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Defect fields the RCA pipeline needs.
+
+    With explicit ``ado_ids`` any state is allowed; otherwise only closed/resolved
+    defects are selected (RCA applies to closed defects), minus ``exclude_ids``.
+    """
+    _require_gateway(authorization)
+    _validate_project_id(project_id)
+    query: dict[str, Any] = {"project_id": project_id}
+    if body.ado_ids is not None:
+        query["ado_id"] = {"$in": body.ado_ids}
+    else:
+        query["state"] = {"$in": list(_ANALYZABLE_STATES)}
+        if body.exclude_ids:
+            query["ado_id"] = {"$nin": body.exclude_ids}
+    collection = _database(request)["defects"]
+    total = await collection.count_documents(query)
+    cursor = (
+        collection.find(query, _ANALYSIS_FIELDS)
+        .sort([("closed_date", -1), ("ado_id", -1)])
+        .limit(body.limit)
+    )
+    defects = await cursor.to_list(length=body.limit)
+    return {"defects": defects, "total_matching": total}
 
 
 @router.get("/internal/projects/{project_id}/defects/{ado_id}")

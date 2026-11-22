@@ -563,3 +563,151 @@ footer {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Phase 4: AI analysis and read-only RCA review */
+.analysis-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.analysis-toolbar label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.analysis-toolbar select {
+  min-width: 170px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #fff;
+}
+
+.analysis-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.job-progress {
+  margin: 4px 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #fbfcfd;
+}
+
+.job-progress-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.progress-track {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: #e8eef2;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--blue), var(--cyan));
+  transition: width 0.4s ease;
+}
+
+.rca-pill {
+  display: inline-block;
+  border-radius: 20px;
+  padding: 4px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rca-pill.ai_proposed {
+  color: #2d5f8c;
+  background: #e8f1fa;
+}
+
+.rca-pill.needs_manual_rca {
+  color: #a64e43;
+  background: #fff1ee;
+}
+
+.rca-pill.approved,
+.rca-pill.corrected {
+  color: #2e7a50;
+  background: #e9f6ee;
+}
+
+.selected-row td {
+  background: #f2f7fb;
+}
+
+.review-panel {
+  margin-top: 22px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 18px;
+  background: #fcfdfd;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.column-title {
+  margin: 0 0 10px;
+  color: var(--navy);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preserve-lines {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.confidence {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.code-chip {
+  margin-left: 6px;
+  border-radius: 5px;
+  padding: 2px 6px;
+  color: #597485;
+  background: #eef3f6;
+  font-size: 11px;
+}
+
+.small-print {
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .review-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .analysis-actions {
+    margin-left: 0;
+  }
+}

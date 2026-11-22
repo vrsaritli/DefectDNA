@@ -1,0 +1,1482 @@
+{
+  "name": "defectdna-golden-set",
+  "built_at": "2026-11-22T06:32:15+00:00",
+  "source_files": [
+    "SAmple_demo_Prod_defects.xlsx",
+    "SAmple_demo_UAT_defects.xlsx"
+  ],
+  "selection_rule": "QA 'Root Cause (RCA)' column and '[RCA review]' comment agree; the review comment is removed from model input; author names removed.",
+  "scored_fields": [
+    "root_cause_code"
+  ],
+  "cases": [
+    {
+      "id": "ADO-326",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 326,
+        "title": "Synonyms not applied after dictionary update for returning customers",
+        "description": "Reported by Customer support. Synonyms not applied after dictionary update for returning customers.",
+        "repro_steps": "Steps to reproduce \nAdd the synonym 'sofa = couch' \nSearch for 'couch' \n Expected: Sofa products are returned \nActual: No results \nEnvironment: Prod, build 2026.1116.3",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC244856 on production build 2026.1116.3. No results.\n\n[2026-11-20] [Dev] Behaviour matches the approved acceptance criteria for story #48; working as designed. Raised with the BA to clarify the wording.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 3",
+        "severity": "2 - High",
+        "priority": "1",
+        "state": "Closed",
+        "tags": [
+          "Downtime",
+          "Not a QA miss",
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search"
+        ],
+        "closed_date": "2026-11-19T16:59:01"
+      },
+      "expected": {
+        "root_cause_code": "TEST_GAP"
+      },
+      "provenance": {
+        "rca_column": "Test Gap",
+        "rca_review": "Test coverage gap"
+      }
+    },
+    {
+      "id": "ADO-337",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 337,
+        "title": "Payment page fails after release",
+        "description": "Reported by Customer support. Payment page fails after release.",
+        "repro_steps": "Steps to reproduce \nOpen the payment page after the release \n Expected: The payment form loads \nActual: HTTP 500 error \nEnvironment: Prod, build 2026.1102.1",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC588431 on production build 2026.1102.1. HTTP 500 error.\n\n[2026-11-20] [Dev] Root cause: the migration script for the payment_methods table was not run in the release. The product owner deferred the fix to the next release; tracked as a known issue.",
+        "module": "SAmple demo\\API\\Payments",
+        "release": "SAmple demo\\Release 1\\Sprint 1",
+        "severity": "2 - High",
+        "priority": "1",
+        "state": "Closed",
+        "tags": [
+          "Downtime",
+          "Known Issue",
+          "payments",
+          "Prod Bug",
+          "QA miss",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": "2026-11-07T17:35:49"
+      },
+      "expected": {
+        "root_cause_code": "CONFIGURATION"
+      },
+      "provenance": {
+        "rca_column": "Configuration",
+        "rca_review": "Environment issue"
+      }
+    },
+    {
+      "id": "ADO-368",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 368,
+        "title": "Search page times out for long queries in en-CA locale",
+        "description": "Reported by Customer support. Search page times out for long queries in en-CA locale.",
+        "repro_steps": "Steps to reproduce \nEnter a query of six or more words \nPress Enter \n Expected: Results load within 2 seconds \nActual: The request times out after 30 seconds \nEnvironment: Prod, build 2026.1020.3",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC699444 on production build 2026.1020.3. The request times out after 30 seconds.\n\n[2026-11-20] [Dev] Investigating. Reproduced locally; looking at the query parser.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 1",
+        "severity": "4 - Low",
+        "priority": "3",
+        "state": "Active",
+        "tags": [
+          "Low Priority",
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "CONFIGURATION"
+      },
+      "provenance": {
+        "rca_column": "Configuration",
+        "rca_review": "Environment issue"
+      }
+    },
+    {
+      "id": "ADO-397",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 397,
+        "title": "Search returns stale results after reindex on iOS Safari",
+        "description": "Reported by Customer support. Search returns stale results after reindex on iOS Safari.",
+        "repro_steps": "Steps to reproduce \nRename a product in catalog admin \nTrigger a reindex for the tenant \nSearch for the new name \n Expected: The renamed product is returned \nActual: Results still show the old name until the cache expires \nEnvironment: Prod, build 2026.1115.1",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC216907 on production build 2026.1115.1. Results still show the old name until the cache expires.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 2",
+        "severity": "1 - Critical",
+        "priority": "1",
+        "state": "New",
+        "tags": [
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search",
+          "ShowStopper"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "TEST_GAP"
+      },
+      "provenance": {
+        "rca_column": "Test Gap",
+        "rca_review": "Test coverage gap"
+      }
+    },
+    {
+      "id": "ADO-402",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 402,
+        "title": "Out-of-stock items shown at the top of results",
+        "description": "Reported by Customer support. Out-of-stock items shown at the top of results.",
+        "repro_steps": "Steps to reproduce \nSearch for 'camera' \nCheck the stock status of the first results \n Expected: Out-of-stock items appear last \nActual: Out-of-stock items appear first \nEnvironment: Prod, build 2026.1105.1",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC734427 on production build 2026.1105.1. Out-of-stock items appear first.\n\n[2026-11-20] [Dev] Root cause: the stock flag was not populated in the seeded catalog data. Fix: applied a data fix to populate stock flags. Fixed in build 2026.1108.1.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 1",
+        "severity": "1 - Critical",
+        "priority": "1",
+        "state": "Resolved",
+        "tags": [
+          "Not a QA miss",
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search",
+          "ShowStopper"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "INTEGRATION"
+      },
+      "provenance": {
+        "rca_column": "Integration",
+        "rca_review": "Integration issue"
+      }
+    },
+    {
+      "id": "ADO-419",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 419,
+        "title": "Saved card cannot be deleted on Android Chrome",
+        "description": "Reported by Customer support. Saved card cannot be deleted on Android Chrome.",
+        "repro_steps": "Steps to reproduce \nOpen saved cards \nDelete a card \n Expected: The card is removed \nActual: The card is still listed \nEnvironment: Prod, build 2026.1108.5",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC382097 on production build 2026.1108.5. The card is still listed.\n\n[2026-11-20] [Dev] Root cause: the delete endpoint ignored the token id parameter. Fix: fixed the parameter binding. Fixed in build 2026.1110.2.",
+        "module": "SAmple demo\\API\\Payments",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "2 - High",
+        "priority": "2",
+        "state": "Closed",
+        "tags": [
+          "Not a QA miss",
+          "payments",
+          "Prod Bug",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": "2026-11-12T13:12:26"
+      },
+      "expected": {
+        "root_cause_code": "CODE"
+      },
+      "provenance": {
+        "rca_column": "Code",
+        "rca_review": "Coding defect"
+      }
+    },
+    {
+      "id": "ADO-435",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 435,
+        "title": "Discount code ignored at checkout on Android Chrome",
+        "description": "Reported by Customer support. Discount code ignored at checkout on Android Chrome.",
+        "repro_steps": "Steps to reproduce \nAdd items worth 120 \nApply code SAVE10 \nReview the order total \n Expected: A 10% discount is applied before tax \nActual: No discount is applied \nEnvironment: Prod, build 2026.1021.3",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC830929 on production build 2026.1021.3. No discount is applied.\n\n[2026-11-20] [Dev] Root cause: the rule engine evaluated discounts after tax and the spec did not define the order. Fix: spec clarified to apply discounts pre-tax; rule order changed. Fixed in build 2026.1027.3.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 2",
+        "severity": "3 - Medium",
+        "priority": "2",
+        "state": "Closed",
+        "tags": [
+          "checkout",
+          "Prod Bug",
+          "Release 1",
+          "Requirement Clarification",
+          "sample-data"
+        ],
+        "closed_date": "2026-10-28T10:04:46"
+      },
+      "expected": {
+        "root_cause_code": "CONFIGURATION"
+      },
+      "provenance": {
+        "rca_column": "Configuration",
+        "rca_review": "Environment issue"
+      }
+    },
+    {
+      "id": "ADO-461",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 461,
+        "title": "Synonyms not applied after dictionary update in en-CA locale",
+        "description": "Reported by Customer support. Synonyms not applied after dictionary update in en-CA locale.",
+        "repro_steps": "Steps to reproduce \nAdd the synonym 'sofa = couch' \nSearch for 'couch' \n Expected: Sofa products are returned \nActual: No results \nEnvironment: Prod, build 2026.1107.3",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC545855 on production build 2026.1107.3. No results.\n\n[2026-11-20] [Dev] Investigating. Reproduced locally; looking at the search configuration.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "4 - Low",
+        "priority": "3",
+        "state": "Active",
+        "tags": [
+          "Downtime",
+          "Low Priority",
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "CODE"
+      },
+      "provenance": {
+        "rca_column": "Code",
+        "rca_review": "Coding defect"
+      }
+    },
+    {
+      "id": "ADO-462",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 462,
+        "title": "Estimated delivery date shows a past date",
+        "description": "Reported by Customer support. Estimated delivery date shows a past date.",
+        "repro_steps": "Steps to reproduce \nAdd an item \nGo to checkout \nCheck the delivery estimate \n Expected: A future delivery date \nActual: Yesterday's date is shown \nEnvironment: Prod, build 2026.1116.2",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC404633 on production build 2026.1116.2. Yesterday's date is shown.\n\n[2026-11-20] [Dev] Root cause: the holiday calendar table was not loaded for the current year. The fix was small (loaded the current-year holiday calendar). The real gap: no regression test covered this path, so it escaped to Prod. Added an automated regression test. Fixed in build 2026.1118.2.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 2",
+        "severity": "2 - High",
+        "priority": "2",
+        "state": "Resolved",
+        "tags": [
+          "checkout",
+          "Prod Bug",
+          "QA miss",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "REQUIREMENTS"
+      },
+      "provenance": {
+        "rca_column": "Requirements",
+        "rca_review": "Requirement gap"
+      }
+    },
+    {
+      "id": "ADO-485",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 485,
+        "title": "Estimated delivery date shows a past date for returning customers",
+        "description": "Reported by Customer support. Estimated delivery date shows a past date for returning customers.",
+        "repro_steps": "Steps to reproduce \nAdd an item \nGo to checkout \nCheck the delivery estimate \n Expected: A future delivery date \nActual: Yesterday's date is shown \nEnvironment: Prod, build 2026.1026.2",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC490615 on production build 2026.1026.2. Yesterday's date is shown.\n\n[2026-11-20] [Dev] Investigating. Reproduced locally; looking at the delivery calendar data.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "2 - High",
+        "priority": "1",
+        "state": "Active",
+        "tags": [
+          "checkout",
+          "Not a QA miss",
+          "Prod Bug",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "CONFIGURATION"
+      },
+      "provenance": {
+        "rca_column": "Configuration",
+        "rca_review": "Environment issue"
+      }
+    },
+    {
+      "id": "ADO-501",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 501,
+        "title": "Estimated delivery date shows a past date intermittently",
+        "description": "Reported by Customer support. Estimated delivery date shows a past date intermittently.",
+        "repro_steps": "Steps to reproduce \nAdd an item \nGo to checkout \nCheck the delivery estimate \n Expected: A future delivery date \nActual: Yesterday's date is shown \nEnvironment: Prod, build 2026.1107.5",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC780991 on production build 2026.1107.5. Yesterday's date is shown.\n\n[2026-11-20] [Dev] Root cause: the holiday calendar table was not loaded for the current year. Fix: loaded the current-year holiday calendar. Fixed in build 2026.1111.2.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 3",
+        "severity": "3 - Medium",
+        "priority": "3",
+        "state": "Closed",
+        "tags": [
+          "checkout",
+          "Prod Bug",
+          "QA miss",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": "2026-11-13T18:31:39"
+      },
+      "expected": {
+        "root_cause_code": "TEST_GAP"
+      },
+      "provenance": {
+        "rca_column": "Test Gap",
+        "rca_review": "Test coverage gap"
+      }
+    },
+    {
+      "id": "ADO-550",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 550,
+        "title": "Sort by price ignores item currency on Android Chrome",
+        "description": "Reported by Customer support. Sort by price ignores item currency on Android Chrome.",
+        "repro_steps": "Steps to reproduce \nSearch for 'laptop' with mixed-currency listings \nSort by price, low to high \n Expected: Items are sorted by converted price \nActual: Items are sorted by raw amount whatever the currency \nEnvironment: Prod, build 2026.1021.6",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC374490 on production build 2026.1021.6. Items are sorted by raw amount whatever the currency.\n\n[2026-11-20] [Dev] Root cause: the spec did not say how to sort listings priced in different currencies. Fix: BA confirmed sorting on the converted base-currency price; implemented that. Fixed in build 2026.1027.2.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 2",
+        "severity": "2 - High",
+        "priority": "1",
+        "state": "Closed",
+        "tags": [
+          "Not a QA miss",
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search"
+        ],
+        "closed_date": "2026-10-27T23:06:03"
+      },
+      "expected": {
+        "root_cause_code": "TEST_GAP"
+      },
+      "provenance": {
+        "rca_column": "Test Gap",
+        "rca_review": "Test coverage gap"
+      }
+    },
+    {
+      "id": "ADO-559",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 559,
+        "title": "Search returns stale results after reindex",
+        "description": "Reported by Customer support. Search returns stale results after reindex.",
+        "repro_steps": "Steps to reproduce \nRename a product in catalog admin \nTrigger a reindex for the tenant \nSearch for the new name \n Expected: The renamed product is returned \nActual: Results still show the old name until the cache expires \nEnvironment: Prod, build 2026.1027.2",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC399156 on production build 2026.1027.2. Results still show the old name until the cache expires.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 2",
+        "severity": "1 - Critical",
+        "priority": "1",
+        "state": "New",
+        "tags": [
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search",
+          "ShowStopper"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "CONFIGURATION"
+      },
+      "provenance": {
+        "rca_column": "Configuration",
+        "rca_review": "Environment issue"
+      }
+    },
+    {
+      "id": "ADO-576",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 576,
+        "title": "Partial refund fails for three-decimal currencies intermittently",
+        "description": "Reported by Customer support. Partial refund fails for three-decimal currencies intermittently.",
+        "repro_steps": "Steps to reproduce \nPay in KWD \nRefund 1.250 KWD \n Expected: The refund succeeds \nActual: Amount validation error \nEnvironment: Prod, build 2026.1113.2",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC487172 on production build 2026.1113.2. Amount validation error.\n\n[2026-11-20] [Dev] Investigating. Reproduced locally; looking at the refund calculator.",
+        "module": "SAmple demo\\API\\Payments",
+        "release": "SAmple demo\\Release 1\\Sprint 2",
+        "severity": "3 - Medium",
+        "priority": "2",
+        "state": "Active",
+        "tags": [
+          "payments",
+          "Prod Bug",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "INTEGRATION"
+      },
+      "provenance": {
+        "rca_column": "Integration",
+        "rca_review": "Integration issue"
+      }
+    },
+    {
+      "id": "ADO-581",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 581,
+        "title": "Login fails after password reset in en-CA locale",
+        "description": "Reported by Customer support. Login fails after password reset in en-CA locale.",
+        "repro_steps": "Steps to reproduce \nReset the password from the checkout sign-in \nSign in with the new password \n Expected: Signed in successfully \nActual: Error: session invalid \nEnvironment: Prod, build 2026.1031.2",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC538055 on production build 2026.1031.2. Error: session invalid.\n\n[2026-11-20] [Dev] Root cause: the reset flow did not invalidate the old session. Fix: invalidate existing sessions on password reset. Fixed in build 2026.1103.1.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 1",
+        "severity": "2 - High",
+        "priority": "1",
+        "state": "Closed",
+        "tags": [
+          "checkout",
+          "Prod Bug",
+          "QA miss",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": "2026-11-04T23:21:43"
+      },
+      "expected": {
+        "root_cause_code": "CODE"
+      },
+      "provenance": {
+        "rca_column": "Code",
+        "rca_review": "Coding defect"
+      }
+    },
+    {
+      "id": "ADO-582",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 582,
+        "title": "Did-you-mean suggestion missing for common typos",
+        "description": "Reported by Customer support. Did-you-mean suggestion missing for common typos.",
+        "repro_steps": "Steps to reproduce \nSearch for 'hedphones' \n Expected: 'Did you mean headphones?' is shown \nActual: No suggestion is shown \nEnvironment: Prod, build 2026.1112.4",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC221587 on production build 2026.1112.4. No suggestion is shown.\n\n[2026-11-20] [Dev] Root cause: a minor version of the spell-check library regressed fuzzy matching. Fix: pinned the spell-check library to the previous minor version. Fixed in build 2026.1117.5.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 3",
+        "severity": "3 - Medium",
+        "priority": "2",
+        "state": "Closed",
+        "tags": [
+          "Not a QA miss",
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search"
+        ],
+        "closed_date": "2026-11-18T19:31:08"
+      },
+      "expected": {
+        "root_cause_code": "CODE"
+      },
+      "provenance": {
+        "rca_column": "Code",
+        "rca_review": "Coding defect"
+      }
+    },
+    {
+      "id": "ADO-601",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 601,
+        "title": "Apple Pay button hidden on supported devices",
+        "description": "Reported by Customer support. Apple Pay button hidden on supported devices.",
+        "repro_steps": "Steps to reproduce \nOpen checkout in Safari on an iPhone \n Expected: The Apple Pay button is visible \nActual: The button is hidden \nEnvironment: Prod, build 2026.1020.6",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC527513 on production build 2026.1020.6. The button is hidden.\n\n[2026-11-20] [Dev] Investigating. Reproduced locally; looking at the wallet configuration.",
+        "module": "SAmple demo\\API\\Payments",
+        "release": "SAmple demo\\Release 1\\Sprint 3",
+        "severity": "1 - Critical",
+        "priority": "1",
+        "state": "Active",
+        "tags": [
+          "Downtime",
+          "payments",
+          "Prod Bug",
+          "QA miss",
+          "Release 1",
+          "sample-data",
+          "ShowStopper"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "REQUIREMENTS"
+      },
+      "provenance": {
+        "rca_column": "Requirements",
+        "rca_review": "Requirement gap"
+      }
+    },
+    {
+      "id": "ADO-604",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 604,
+        "title": "Discount code ignored at checkout",
+        "description": "Reported by Customer support. Discount code ignored at checkout.",
+        "repro_steps": "Steps to reproduce \nAdd items worth 120 \nApply code SAVE10 \nReview the order total \n Expected: A 10% discount is applied before tax \nActual: No discount is applied \nEnvironment: Prod, build 2026.1115.4",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC628492 on production build 2026.1115.4. No discount is applied.\n\n[2026-11-20] [Dev] Investigating. Reproduced locally; looking at the discount rule engine.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "4 - Low",
+        "priority": "4",
+        "state": "Active",
+        "tags": [
+          "checkout",
+          "Low Priority",
+          "Not a QA miss",
+          "Prod Bug",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "CONFIGURATION"
+      },
+      "provenance": {
+        "rca_column": "Configuration",
+        "rca_review": "Environment issue"
+      }
+    },
+    {
+      "id": "ADO-628",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 628,
+        "title": "Refund SLA differs between help page and API docs",
+        "description": "Reported by Customer support. Refund SLA differs between help page and API docs.",
+        "repro_steps": "Steps to reproduce \nCompare the refund SLA on the help page and in the API docs \n Expected: The same SLA in both \nActual: 5 days vs 10 days \nEnvironment: Prod, build 2026.1026.4",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC847024 on production build 2026.1026.4. 5 days vs 10 days.\n\n[2026-11-20] [Dev] Root cause: the Payments and Web teams worked from different SLA values. Fix: aligned the SLA after a cross-team sync. Fixed in build 2026.1029.5.",
+        "module": "SAmple demo\\API\\Payments",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "3 - Medium",
+        "priority": "3",
+        "state": "Closed",
+        "tags": [
+          "Not a QA miss",
+          "payments",
+          "Prod Bug",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": "2026-10-29T20:34:39"
+      },
+      "expected": {
+        "root_cause_code": "DATA"
+      },
+      "provenance": {
+        "rca_column": "Data",
+        "rca_review": "Data issue"
+      }
+    },
+    {
+      "id": "ADO-633",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 633,
+        "title": "Shipping address not saved to address book",
+        "description": "Reported by Customer support. Shipping address not saved to address book.",
+        "repro_steps": "Steps to reproduce \nEnter a new shipping address \nTick 'Save to address book' \nComplete the order \n Expected: The address is saved \nActual: The address is not in the address book \nEnvironment: Prod, build 2026.1109.6",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC357338 on production build 2026.1109.6. The address is not in the address book.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 3",
+        "severity": "2 - High",
+        "priority": "2",
+        "state": "New",
+        "tags": [
+          "checkout",
+          "Not a QA miss",
+          "Prod Bug",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "TEST_GAP"
+      },
+      "provenance": {
+        "rca_column": "Test Gap",
+        "rca_review": "Test coverage gap"
+      }
+    },
+    {
+      "id": "ADO-635",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 635,
+        "title": "Sort by price ignores item currency intermittently",
+        "description": "Reported by Customer support. Sort by price ignores item currency intermittently.",
+        "repro_steps": "Steps to reproduce \nSearch for 'laptop' with mixed-currency listings \nSort by price, low to high \n Expected: Items are sorted by converted price \nActual: Items are sorted by raw amount whatever the currency \nEnvironment: Prod, build 2026.1118.1",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC165190 on production build 2026.1118.1. Items are sorted by raw amount whatever the currency.\n\n[2026-11-20] [Dev] Investigating. Reproduced locally; looking at the sort comparator.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 3",
+        "severity": "2 - High",
+        "priority": "2",
+        "state": "Active",
+        "tags": [
+          "Prod Bug",
+          "QA miss",
+          "Release 1",
+          "sample-data",
+          "search"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "INTEGRATION"
+      },
+      "provenance": {
+        "rca_column": "Integration",
+        "rca_review": "Integration issue"
+      }
+    },
+    {
+      "id": "ADO-640",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 640,
+        "title": "Did-you-mean suggestion missing for common typos in en-CA locale",
+        "description": "Reported by Customer support. Did-you-mean suggestion missing for common typos in en-CA locale.",
+        "repro_steps": "Steps to reproduce \nSearch for 'hedphones' \n Expected: 'Did you mean headphones?' is shown \nActual: No suggestion is shown \nEnvironment: Prod, build 2026.1019.5",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC299491 on production build 2026.1019.5. No suggestion is shown.\n\n[2026-11-20] [Dev] Investigating. Reproduced locally; looking at the spell-check library.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "4 - Low",
+        "priority": "4",
+        "state": "Active",
+        "tags": [
+          "Low Priority",
+          "Not a QA miss",
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "DATA"
+      },
+      "provenance": {
+        "rca_column": "Data",
+        "rca_review": "Data issue"
+      }
+    },
+    {
+      "id": "ADO-641",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 641,
+        "title": "Facet counts do not match results after brand filter",
+        "description": "Reported by Customer support. Facet counts do not match results after brand filter.",
+        "repro_steps": "Steps to reproduce \nSearch for 'shoes' \nSelect brand 'Contoso' \nCompare facet counts with the result count \n Expected: Facet counts match the filtered results \nActual: Facet counts still reflect the unfiltered set \nEnvironment: Prod, build 2026.1107.1",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC754356 on production build 2026.1107.1. Facet counts still reflect the unfiltered set.\n\n[2026-11-20] [Dev] Duplicate of #357; closing this one.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 3",
+        "severity": "2 - High",
+        "priority": "2",
+        "state": "Closed",
+        "tags": [
+          "Not a QA miss",
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search"
+        ],
+        "closed_date": "2026-11-15T07:55:03"
+      },
+      "expected": {
+        "root_cause_code": "CONFIGURATION"
+      },
+      "provenance": {
+        "rca_column": "Configuration",
+        "rca_review": "Environment issue"
+      }
+    },
+    {
+      "id": "ADO-642",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 642,
+        "title": "Tax breakdown missing for tax-exempt customers",
+        "description": "Reported by Customer support. Tax breakdown missing for tax-exempt customers.",
+        "repro_steps": "Steps to reproduce \nSign in as a tax-exempt business customer \nGo to checkout \n Expected: The tax line shows 0.00 with an exemption note \nActual: The tax section is missing \nEnvironment: Prod, build 2026.1030.5",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC626714 on production build 2026.1030.5. The tax section is missing.\n\n[2026-11-20] [Dev] Root cause: the tax model had no exempt state, so the component rendered nothing. Fix: added an exemption state to the tax model and UI. Fixed in build 2026.1104.2.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 2",
+        "severity": "1 - Critical",
+        "priority": "1",
+        "state": "Resolved",
+        "tags": [
+          "checkout",
+          "Prod Bug",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "DATA"
+      },
+      "provenance": {
+        "rca_column": "Data",
+        "rca_review": "Data issue"
+      }
+    },
+    {
+      "id": "ADO-645",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 645,
+        "title": "Search page times out for long queries on iOS Safari",
+        "description": "Reported by Customer support. Search page times out for long queries on iOS Safari.",
+        "repro_steps": "Steps to reproduce \nEnter a query of six or more words \nPress Enter \n Expected: Results load within 2 seconds \nActual: The request times out after 30 seconds \nEnvironment: Prod, build 2026.1114.2",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC952907 on production build 2026.1114.2. The request times out after 30 seconds.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "2 - High",
+        "priority": "2",
+        "state": "New",
+        "tags": [
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "TEST_GAP"
+      },
+      "provenance": {
+        "rca_column": "Test Gap",
+        "rca_review": "Test coverage gap"
+      }
+    },
+    {
+      "id": "ADO-657",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 657,
+        "title": "Synonyms not applied after dictionary update",
+        "description": "Reported by Customer support. Synonyms not applied after dictionary update.",
+        "repro_steps": "Steps to reproduce \nAdd the synonym 'sofa = couch' \nSearch for 'couch' \n Expected: Sofa products are returned \nActual: No results \nEnvironment: Prod, build 2026.1110.6",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC656142 on production build 2026.1110.6. No results.\n\n[2026-11-20] [Dev] Root cause: the synonym file path was missing from the environment configuration. The product owner deferred the fix to the next release; tracked as a known issue.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 1",
+        "severity": "4 - Low",
+        "priority": "4",
+        "state": "Closed",
+        "tags": [
+          "Known Issue",
+          "Low Priority",
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search"
+        ],
+        "closed_date": "2026-11-14T16:10:47"
+      },
+      "expected": {
+        "root_cause_code": "CODE"
+      },
+      "provenance": {
+        "rca_column": "Code",
+        "rca_review": "Coding defect"
+      }
+    },
+    {
+      "id": "ADO-664",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 664,
+        "title": "Login fails after password reset",
+        "description": "Reported by Customer support. Login fails after password reset.",
+        "repro_steps": "Steps to reproduce \nReset the password from the checkout sign-in \nSign in with the new password \n Expected: Signed in successfully \nActual: Error: session invalid \nEnvironment: Prod, build 2026.1021.1",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC315558 on production build 2026.1021.1. Error: session invalid.\n\n[2026-11-20] [Dev] Root cause: the reset flow did not invalidate the old session. The fix was small (invalidate existing sessions on password reset). The real gap: no regression test covered this path, so it escaped to Prod. Added an automated regression test. Fixed in build 2026.1026.4.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 1",
+        "severity": "2 - High",
+        "priority": "1",
+        "state": "Closed",
+        "tags": [
+          "checkout",
+          "Prod Bug",
+          "QA miss",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": "2026-10-28T14:01:37"
+      },
+      "expected": {
+        "root_cause_code": "CODE"
+      },
+      "provenance": {
+        "rca_column": "Code",
+        "rca_review": "Coding defect"
+      }
+    },
+    {
+      "id": "ADO-675",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 675,
+        "title": "Facet counts do not match results after brand filter intermittently",
+        "description": "Reported by Customer support. Facet counts do not match results after brand filter intermittently.",
+        "repro_steps": "Steps to reproduce \nSearch for 'shoes' \nSelect brand 'Contoso' \nCompare facet counts with the result count \n Expected: Facet counts match the filtered results \nActual: Facet counts still reflect the unfiltered set \nEnvironment: Prod, build 2026.1023.4",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC401533 on production build 2026.1023.4. Facet counts still reflect the unfiltered set.\n\n[2026-11-20] [Dev] Root cause: facet aggregation ran before the post-filter. Fix: moved aggregation after filtering. Fixed in build 2026.1029.3.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 1",
+        "severity": "3 - Medium",
+        "priority": "2",
+        "state": "Resolved",
+        "tags": [
+          "Prod Bug",
+          "Release 1",
+          "sample-data",
+          "search"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "INTEGRATION"
+      },
+      "provenance": {
+        "rca_column": "Integration",
+        "rca_review": "Integration issue"
+      }
+    },
+    {
+      "id": "ADO-682",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 682,
+        "title": "Return policy text on order confirmation is outdated on iOS Safari",
+        "description": "Reported by Customer support. Return policy text on order confirmation is outdated on iOS Safari.",
+        "repro_steps": "Steps to reproduce \nPlace an order \nRead the return policy on the confirmation page \n Expected: The 30-day policy is shown \nActual: A 14-day policy is shown \nEnvironment: Prod, build 2026.1031.2",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC517955 on production build 2026.1031.2. A 14-day policy is shown.\n\n[2026-11-20] [Dev] Investigating. Reproduced locally; looking at the content source.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 3",
+        "severity": "2 - High",
+        "priority": "2",
+        "state": "Active",
+        "tags": [
+          "checkout",
+          "Prod Bug",
+          "QA miss",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "THIRD_PARTY"
+      },
+      "provenance": {
+        "rca_column": "Third Party",
+        "rca_review": "Third-party issue"
+      }
+    },
+    {
+      "id": "ADO-711",
+      "source": "SAmple_demo_Prod_defects",
+      "defect": {
+        "ado_id": 711,
+        "title": "Export CSV missing final row on iOS Safari",
+        "description": "Reported by Customer support. Export CSV missing final row on iOS Safari.",
+        "repro_steps": "Steps to reproduce \nOpen order history with 25 orders \nExport to CSV \n Expected: 25 rows are exported \nActual: 24 rows are exported \nEnvironment: Prod, build 2026.1117.4",
+        "comments": "[2026-11-20] [Support] Customer-reported via ticket INC711743 on production build 2026.1117.4. 24 rows are exported.\n\n[2026-11-20] [Dev] Cannot reproduce on build 2026.1120.1 with the same data and steps. Please reopen with logs if it happens again.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "3 - Medium",
+        "priority": "3",
+        "state": "Resolved",
+        "tags": [
+          "checkout",
+          "Prod Bug",
+          "Release 1",
+          "sample-data"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "CODE"
+      },
+      "provenance": {
+        "rca_column": "Code",
+        "rca_review": "Coding defect"
+      }
+    },
+    {
+      "id": "ADO-322",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 322,
+        "title": "Guest checkout confirmation email not sent in en-CA locale",
+        "description": "Reported by UAT business users. Guest checkout confirmation email not sent in en-CA locale.",
+        "repro_steps": "Steps to reproduce \nCheck out as a guest \nPlace the order \n Expected: A confirmation email arrives \nActual: No email arrives \nEnvironment: UAT, build 2026.1012.6",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1012.6. No email arrives.\n\n[2026-11-20] [Dev] Root cause: the notification service renamed the order-placed event and guest checkout still published the old name. Fix: updated the event name in the guest checkout publisher. Fixed in build 2026.1016.3.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "3 - Medium",
+        "priority": "2",
+        "state": "Closed",
+        "tags": [
+          "checkout",
+          "QA miss",
+          "Release 1",
+          "sample-data",
+          "UAT Bug"
+        ],
+        "closed_date": "2026-10-17T09:07:32"
+      },
+      "expected": {
+        "root_cause_code": "THIRD_PARTY"
+      },
+      "provenance": {
+        "rca_column": "Third Party",
+        "rca_review": "Third-party issue"
+      }
+    },
+    {
+      "id": "ADO-327",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 327,
+        "title": "Payment webhook retries duplicate charges",
+        "description": "Reported by UAT business users. Payment webhook retries duplicate charges.",
+        "repro_steps": "Steps to reproduce \nPlace an order \nSimulate a webhook timeout so the provider retries \n Expected: One charge \nActual: Two charges \nEnvironment: UAT, build 2026.1005.5",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1005.5. Two charges.\n\n[2026-11-20] [Dev] Not a bug: the test used an expired test card on an inactive account. Retested with valid data and it works.",
+        "module": "SAmple demo\\API\\Payments",
+        "release": "SAmple demo\\Release 1\\Sprint 3",
+        "severity": "2 - High",
+        "priority": "2",
+        "state": "Resolved",
+        "tags": [
+          "Not a QA miss",
+          "payments",
+          "Release 1",
+          "sample-data",
+          "UAT Bug"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "DATA"
+      },
+      "provenance": {
+        "rca_column": "Data",
+        "rca_review": "Data issue"
+      }
+    },
+    {
+      "id": "ADO-355",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 355,
+        "title": "Shipping address not saved to address book",
+        "description": "Reported by UAT business users. Shipping address not saved to address book.",
+        "repro_steps": "Steps to reproduce \nEnter a new shipping address \nTick 'Save to address book' \nComplete the order \n Expected: The address is saved \nActual: The address is not in the address book \nEnvironment: UAT, build 2026.1014.1",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1014.1. The address is not in the address book.\n\n[2026-11-20] [Dev] Duplicate of #464; closing this one.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 2",
+        "severity": "2 - High",
+        "priority": "2",
+        "state": "Closed",
+        "tags": [
+          "checkout",
+          "Release 1",
+          "sample-data",
+          "UAT Bug"
+        ],
+        "closed_date": "2026-10-21T11:38:42"
+      },
+      "expected": {
+        "root_cause_code": "THIRD_PARTY"
+      },
+      "provenance": {
+        "rca_column": "Third Party",
+        "rca_review": "Third-party issue"
+      }
+    },
+    {
+      "id": "ADO-370",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 370,
+        "title": "Search returns stale results after reindex",
+        "description": "Reported by UAT business users. Search returns stale results after reindex.",
+        "repro_steps": "Steps to reproduce \nRename a product in catalog admin \nTrigger a reindex for the tenant \nSearch for the new name \n Expected: The renamed product is returned \nActual: Results still show the old name until the cache expires \nEnvironment: UAT, build 2026.1008.3",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1008.3. Results still show the old name until the cache expires.\n\n[2026-11-20] [Dev] Root cause: the cache key missed the tenant id, so another tenant's cached page was served. The fix was small (added the tenant id to the search cache key). The real gap: no regression test covered this path, so it escaped to UAT. Added an automated regression test. Fixed in build 2026.1012.5.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "2 - High",
+        "priority": "2",
+        "state": "Closed",
+        "tags": [
+          "QA miss",
+          "Release 1",
+          "sample-data",
+          "search",
+          "UAT Bug"
+        ],
+        "closed_date": "2026-10-13T16:03:14"
+      },
+      "expected": {
+        "root_cause_code": "CONFIGURATION"
+      },
+      "provenance": {
+        "rca_column": "Configuration",
+        "rca_review": "Environment issue"
+      }
+    },
+    {
+      "id": "ADO-532",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 532,
+        "title": "Gift wrap charge added twice after page refresh",
+        "description": "Reported by UAT business users. Gift wrap charge added twice after page refresh.",
+        "repro_steps": "Steps to reproduce \nAdd gift wrap to one item \nReview the order summary \n Expected: One gift wrap charge \nActual: Two gift wrap charges \nEnvironment: UAT, build 2026.1011.4",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1011.4. Two gift wrap charges.\n\n[2026-11-20] [Dev] Fix: removed the duplicate charge from the order service. Could not confirm the original cause from the logs. Fixed in build 2026.1014.1.",
+        "module": "SAmple demo\\Web\\Checkout",
+        "release": "SAmple demo\\Release 1\\Sprint 3",
+        "severity": "4 - Low",
+        "priority": "4",
+        "state": "Closed",
+        "tags": [
+          "checkout",
+          "Low Priority",
+          "Release 1",
+          "sample-data",
+          "UAT Bug"
+        ],
+        "closed_date": "2026-10-15T07:49:41"
+      },
+      "expected": {
+        "root_cause_code": "CONFIGURATION"
+      },
+      "provenance": {
+        "rca_column": "Configuration",
+        "rca_review": "Environment issue"
+      }
+    },
+    {
+      "id": "ADO-546",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 546,
+        "title": "Out-of-stock items shown at the top of results intermittently",
+        "description": "Reported by UAT business users. Out-of-stock items shown at the top of results intermittently.",
+        "repro_steps": "Steps to reproduce \nSearch for 'camera' \nCheck the stock status of the first results \n Expected: Out-of-stock items appear last \nActual: Out-of-stock items appear first \nEnvironment: UAT, build 2026.1007.1",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1007.1. Out-of-stock items appear first.\n\n[2026-11-20] [Dev] Root cause: the stock flag was not populated in the seeded catalog data. Fix: applied a data fix to populate stock flags. Fixed in build 2026.1010.2.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "2 - High",
+        "priority": "2",
+        "state": "Resolved",
+        "tags": [
+          "Not a QA miss",
+          "Release 1",
+          "sample-data",
+          "search",
+          "UAT Bug"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "DATA"
+      },
+      "provenance": {
+        "rca_column": "Data",
+        "rca_review": "Data issue"
+      }
+    },
+    {
+      "id": "ADO-578",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 578,
+        "title": "Autocomplete shows suggestions from another tenant after page refresh",
+        "description": "Reported by UAT business users. Autocomplete shows suggestions from another tenant after page refresh.",
+        "repro_steps": "Steps to reproduce \nSign in to tenant A \nType 'con' in the search box \nReview the suggestions \n Expected: Only tenant A products are suggested \nActual: Suggestions include tenant B product names \nEnvironment: UAT, build 2026.1008.3",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1008.3. Suggestions include tenant B product names.\n\n[2026-11-20] [Dev] Invalid: raised against a build that was never deployed to UAT.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 2",
+        "severity": "3 - Medium",
+        "priority": "3",
+        "state": "Closed",
+        "tags": [
+          "QA miss",
+          "Release 1",
+          "sample-data",
+          "search",
+          "UAT Bug"
+        ],
+        "closed_date": "2026-10-15T03:01:19"
+      },
+      "expected": {
+        "root_cause_code": "DATA"
+      },
+      "provenance": {
+        "rca_column": "Data",
+        "rca_review": "Data issue"
+      }
+    },
+    {
+      "id": "ADO-614",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 614,
+        "title": "Chargeback notifications not received",
+        "description": "Reported by UAT business users. Chargeback notifications not received.",
+        "repro_steps": "Steps to reproduce \nRaise a test chargeback in the provider sandbox \n Expected: The chargeback is recorded \nActual: Nothing is recorded \nEnvironment: UAT, build 2026.1016.1",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1016.1. Nothing is recorded.\n\n[2026-11-20] [Dev] Behaviour matches the approved acceptance criteria for story #28; working as designed. Raised with the BA to clarify the wording.",
+        "module": "SAmple demo\\API\\Payments",
+        "release": "SAmple demo\\Release 1\\Sprint 1",
+        "severity": "3 - Medium",
+        "priority": "3",
+        "state": "Closed",
+        "tags": [
+          "Not a QA miss",
+          "payments",
+          "Release 1",
+          "sample-data",
+          "UAT Bug"
+        ],
+        "closed_date": "2026-10-24T22:35:32"
+      },
+      "expected": {
+        "root_cause_code": "INTEGRATION"
+      },
+      "provenance": {
+        "rca_column": "Integration",
+        "rca_review": "Integration issue"
+      }
+    },
+    {
+      "id": "ADO-636",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 636,
+        "title": "Reconciliation job marks settled payments as pending",
+        "description": "Reported by UAT business users. Reconciliation job marks settled payments as pending.",
+        "repro_steps": "Steps to reproduce \nRun the nightly reconciliation \nCheck partially settled payments \n Expected: Status is Settled \nActual: Status is Pending \nEnvironment: UAT, build 2026.1014.3",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1014.3. Status is Pending.\n\n[2026-11-20] [Dev] Root cause: the provider status code SETTLED_PARTIAL was not mapped. Fix: added the status mapping. Fixed in build 2026.1016.5.",
+        "module": "SAmple demo\\API\\Payments",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "1 - Critical",
+        "priority": "1",
+        "state": "Closed",
+        "tags": [
+          "payments",
+          "QA miss",
+          "Release 1",
+          "sample-data",
+          "ShowStopper",
+          "UAT Bug"
+        ],
+        "closed_date": "2026-10-19T03:57:38"
+      },
+      "expected": {
+        "root_cause_code": "CODE"
+      },
+      "provenance": {
+        "rca_column": "Code",
+        "rca_review": "Coding defect"
+      }
+    },
+    {
+      "id": "ADO-655",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 655,
+        "title": "Sort by price ignores item currency on Firefox",
+        "description": "Reported by UAT business users. Sort by price ignores item currency on Firefox.",
+        "repro_steps": "Steps to reproduce \nSearch for 'laptop' with mixed-currency listings \nSort by price, low to high \n Expected: Items are sorted by converted price \nActual: Items are sorted by raw amount whatever the currency \nEnvironment: UAT, build 2026.1006.6",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1006.6. Items are sorted by raw amount whatever the currency.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 1",
+        "severity": "3 - Medium",
+        "priority": "2",
+        "state": "New",
+        "tags": [
+          "QA miss",
+          "Release 1",
+          "sample-data",
+          "search",
+          "UAT Bug"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "TEST_GAP"
+      },
+      "provenance": {
+        "rca_column": "Test Gap",
+        "rca_review": "Test coverage gap"
+      }
+    },
+    {
+      "id": "ADO-714",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 714,
+        "title": "Price range filter excludes items at the upper boundary for returning customers",
+        "description": "Reported by UAT business users. Price range filter excludes items at the upper boundary for returning customers.",
+        "repro_steps": "Steps to reproduce \nSearch for 'headphones' \nSet the price filter to 50-100 \nLook for an item priced exactly 100.00 \n Expected: The 100.00 item is included \nActual: The 100.00 item is missing \nEnvironment: UAT, build 2026.1006.3",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1006.3. The 100.00 item is missing.\n\n[2026-11-20] [Dev] Root cause: the filter used a strict less-than on the upper bound. Fix: made the comparison inclusive and added boundary unit tests. Fixed in build 2026.1013.3.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 4",
+        "severity": "3 - Medium",
+        "priority": "3",
+        "state": "Resolved",
+        "tags": [
+          "QA miss",
+          "Release 1",
+          "sample-data",
+          "search",
+          "UAT Bug"
+        ],
+        "closed_date": null
+      },
+      "expected": {
+        "root_cause_code": "TEST_GAP"
+      },
+      "provenance": {
+        "rca_column": "Test Gap",
+        "rca_review": "Test coverage gap"
+      }
+    },
+    {
+      "id": "ADO-718",
+      "source": "SAmple_demo_UAT_defects",
+      "defect": {
+        "ado_id": 718,
+        "title": "Autocomplete shows suggestions from another tenant",
+        "description": "Reported by UAT business users. Autocomplete shows suggestions from another tenant.",
+        "repro_steps": "Steps to reproduce \nSign in to tenant A \nType 'con' in the search box \nReview the suggestions \n Expected: Only tenant A products are suggested \nActual: Suggestions include tenant B product names \nEnvironment: UAT, build 2026.1012.6",
+        "comments": "[2026-11-20] [UAT] Raised by business users during UAT on build 2026.1012.6. Suggestions include tenant B product names.\n\n[2026-11-20] [Dev] Behaviour matches the approved acceptance criteria for story #44; working as designed. Raised with the BA to clarify the wording.",
+        "module": "SAmple demo\\Web\\Search",
+        "release": "SAmple demo\\Release 1\\Sprint 1",
+        "severity": "2 - High",
+        "priority": "1",
+        "state": "Closed",
+        "tags": [
+          "Not a QA miss",
+          "Release 1",
+          "sample-data",
+          "search",
+          "UAT Bug"
+        ],
+        "closed_date": "2026-10-17T19:32:00"
+      },
+      "expected": {
+        "root_cause_code": "THIRD_PARTY"
+      },
+      "provenance": {
+        "rca_column": "Third Party",
+        "rca_review": "Third-party issue"
+      }
+    }
+  ],
+  "excluded": {
+    "conflicting_labels": [
+      {
+        "ado_id": 303,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Test coverage gap"
+      },
+      {
+        "ado_id": 325,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 332,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Requirement gap"
+      },
+      {
+        "ado_id": 351,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Requirement gap"
+      },
+      {
+        "ado_id": 396,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Requirements",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 434,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Requirements",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 453,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 493,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Requirements",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 524,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Test coverage gap"
+      },
+      {
+        "ado_id": 562,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Requirement gap"
+      },
+      {
+        "ado_id": 611,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Requirement gap"
+      },
+      {
+        "ado_id": 615,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Requirements",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 616,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Requirement gap"
+      },
+      {
+        "ado_id": 618,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Requirements",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 621,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Requirement gap"
+      },
+      {
+        "ado_id": 638,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 660,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Test coverage gap"
+      },
+      {
+        "ado_id": 683,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Requirements",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 686,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Requirements",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 708,
+        "source": "SAmple_demo_Prod_defects",
+        "rca_column": "Code",
+        "rca_review": "Test coverage gap"
+      },
+      {
+        "ado_id": 301,
+        "source": "SAmple_demo_UAT_defects",
+        "rca_column": "Code",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 375,
+        "source": "SAmple_demo_UAT_defects",
+        "rca_column": "Code",
+        "rca_review": "Test coverage gap"
+      },
+      {
+        "ado_id": 398,
+        "source": "SAmple_demo_UAT_defects",
+        "rca_column": "Code",
+        "rca_review": "Requirement gap"
+      },
+      {
+        "ado_id": 403,
+        "source": "SAmple_demo_UAT_defects",
+        "rca_column": "Code",
+        "rca_review": "Test coverage gap"
+      },
+      {
+        "ado_id": 504,
+        "source": "SAmple_demo_UAT_defects",
+        "rca_column": "Code",
+        "rca_review": "Environment issue"
+      },
+      {
+        "ado_id": 572,
+        "source": "SAmple_demo_UAT_defects",
+        "rca_column": "Code",
+        "rca_review": "Test coverage gap"
+      }
+    ],
+    "unlabelled_or_unmapped_count": 52
+  }
+}

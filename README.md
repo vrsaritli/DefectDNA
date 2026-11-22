@@ -112,3 +112,81 @@ The repository does not include a sanitized sample ADO export or an ADO PAT.
 CSV/XLSX parsing and ADO request behavior are validated with local fixtures and
 mocked HTTP responses; live synchronization still requires the pending ADO
 credential and test project.
+
+## Phase 4 — AI RCA slice
+
+Phase 4 proposes a root cause, SDLC phase and testing gap for each closed defect,
+using Groq `openai/gpt-oss-120b` with strict JSON-schema output, and shows the
+proposal read-only (approve/correct is Phase 5).
+
+**Pipeline (ai-knowledge-service worker):** scrub sensitive values (emails, URLs,
+internal hosts, IPs, tokens/keys, GUIDs, long numbers) → pack defects into
+token-budgeted batches → Groq → validate every item against the project's
+taxonomy version → retry rejected items once → store `rca_analyses` as
+`AI_PROPOSED`, or `NEEDS_MANUAL_RCA` with a failure code. Reviewed RCAs are never
+overwritten; re-analysis replaces only unreviewed ones. Logs contain IDs, codes and
+counts only — never defect text, prompts or keys.
+
+**Token budget per Groq request:** defects are packed while the estimated prompt
+plus expected output stays at or below `LLM_BATCH_TARGET_TOKENS` (4,000), and
+`max_completion_tokens` is set so prompt + output can never exceed
+`LLM_REQUEST_TOKEN_BUDGET` (4,500). The fixed system prompt (rules + taxonomy) is
+about 1,300 tokens, so batching (usually 3–4 defects per call) avoids paying it
+once per defect. In the baseline run, requests averaged 3,274 tokens (max 4,106).
+
+**Taxonomy:** each project starts with a versioned starter taxonomy. Root causes
+follow the QA team's existing categories from the ADO exports (Requirements,
+Design, Code, Integration, Data, Configuration, Deployment, Third Party, Security,
+Test Gap, Other). QA Leads can publish a new version with
+`PUT /api/v1/projects/{id}/taxonomy`.
+
+**Data-handling gate:** AI analysis is on by default when `ENV=dev` and off when
+`ENV=prod` until a project Admin enables it with
+`PUT /api/v1/projects/{id}/settings {"llm_analysis_enabled": true}`.
+
+### Setup
+
+1. Add `GROQ_API_KEY` (and optionally the other Phase 4 values in
+   `.env.example`) to `.env`.
+2. Apply the Phase 4 indexes and starter taxonomy:
+
+```bash
+python migrations/004_ai_rca.py
+```
+
+3. Run the AI-knowledge service and its worker (both are needed):
+
+```bash
+uvicorn services.ai_knowledge_service.app.main:app --reload --port 8002
+python -m services.ai_knowledge_service.app.worker
+```
+
+4. In the app, open **AI analysis** → **Analyze new closed defects**. Progress
+   is polled from `/api/v1/jobs/{id}`; open any row to see the defect next to the
+   AI proposal.
+
+### New endpoints
+
+| Method | Endpoint | Purpose | Min role |
+|---|---|---|---|
+| GET | `/projects/{pid}/taxonomy` | Current taxonomy | Viewer |
+| PUT | `/projects/{pid}/taxonomy` | Publish a new taxonomy version | QA Lead |
+| GET/PUT | `/projects/{pid}/settings` | Read / set `llm_analysis_enabled` | Viewer / Admin |
+| POST | `/projects/{pid}/analyses` | Analyze unanalyzed closed defects, or `{"ado_ids": [...]}`, `{"reanalyze": true}` (job) | QA Lead |
+| GET | `/projects/{pid}/rcas?status=` | List RCAs | Viewer |
+| GET | `/rcas/{rca_id}` | RCA detail with taxonomy labels | Viewer |
+
+`GET /projects/{pid}/defects/{ado_id}` now includes the defect's latest RCA.
+
+### Golden set and accuracy baseline
+
+```bash
+# rebuild from ADO exports that carry a QA "Root Cause (RCA)" column
+python -m services.ai_knowledge_service.evals.build_golden_set <Prod.xlsx> <UAT.xlsx> \
+    --out services/ai_knowledge_service/evals/golden_set.json
+# run it through the production pipeline (calls Groq)
+python -m services.ai_knowledge_service.evals.run_golden_set
+```
+
+See [services/ai_knowledge_service/evals/README.md](services/ai_knowledge_service/evals/README.md)
+for the baseline and how to read it.

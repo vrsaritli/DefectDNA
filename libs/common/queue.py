@@ -16,6 +16,18 @@ class JobQueue(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def heartbeat(
+        self,
+        job_id: str,
+        owner: str,
+        *,
+        lease_seconds: int = 300,
+        set_fields: dict[str, Any] | None = None,
+    ) -> bool:
+        """Mark the job RUNNING, extend its lease and optionally set extra fields."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def complete(self, job_id: str, owner: str) -> bool:
         raise NotImplementedError
 
@@ -84,6 +96,30 @@ class MongoJobQueue(JobQueue):
             return_document=ReturnDocument.AFTER,
         )
         return claimed
+
+    async def heartbeat(
+        self,
+        job_id: str,
+        owner: str,
+        *,
+        lease_seconds: int = 300,
+        set_fields: dict[str, Any] | None = None,
+    ) -> bool:
+        from bson import ObjectId
+
+        now = datetime.now(UTC)
+        result = await self.collection.update_one(
+            {"_id": ObjectId(job_id), "owner": owner, "status": {"$in": ["CLAIMED", "RUNNING"]}},
+            {
+                "$set": {
+                    **(set_fields or {}),
+                    "status": "RUNNING",
+                    "lease_expires_at": now + timedelta(seconds=lease_seconds),
+                    "updated_at": now,
+                }
+            },
+        )
+        return result.matched_count == 1
 
     async def complete(self, job_id: str, owner: str) -> bool:
         from bson import ObjectId

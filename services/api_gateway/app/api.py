@@ -33,6 +33,7 @@ from services.api_gateway.app.auth.tokens import (
     create_session_token,
     hash_csrf_token,
 )
+from services.api_gateway.app.taxonomy import enrich_rca
 
 router = APIRouter(prefix="/api/v1")
 _USERNAME_PATTERN = re.compile(r"^[a-z0-9._@+-]{3,254}$")
@@ -164,24 +165,27 @@ async def _require_project_role(
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN"})
 
 
-async def _call_ingestion(
+async def _call_internal_service(
+    base_url: str,
+    service: str,
     method: str,
     path: str,
     *,
-    headers: dict[str, str],
+    headers: dict[str, str] | None = None,
     params: dict[str, Any] | None = None,
     files: dict[str, tuple[str, bytes, str]] | None = None,
     data: dict[str, str] | None = None,
+    json_body: Any = None,
 ) -> tuple[int, dict[str, Any]]:
     if len(settings.service_token_secret.encode("utf-8")) < 32:
         raise HTTPException(status_code=503, detail={"code": "SERVICE_AUTH_NOT_CONFIGURED"})
     service_headers = {
-        **headers,
+        **(headers or {}),
         "Authorization": f"Bearer {create_service_token(settings.service_token_secret, 'api-gateway')}",
     }
     try:
         async with httpx.AsyncClient(
-            base_url=settings.ingestion_service_url.rstrip("/"),
+            base_url=base_url.rstrip("/"),
             timeout=httpx.Timeout(30.0),
         ) as client:
             response = await client.request(
@@ -191,27 +195,68 @@ async def _call_ingestion(
                 params=params,
                 files=files,
                 data=data,
+                json=json_body,
             )
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=503, detail={"code": "INGESTION_UNAVAILABLE"}) from exc
+        raise HTTPException(status_code=503, detail={"code": f"{service}_UNAVAILABLE"}) from exc
 
     try:
         payload = response.json()
     except ValueError as exc:
-        raise HTTPException(status_code=502, detail={"code": "INVALID_INGESTION_RESPONSE"}) from exc
+        raise HTTPException(status_code=502, detail={"code": f"INVALID_{service}_RESPONSE"}) from exc
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=502, detail={"code": "INVALID_INGESTION_RESPONSE"})
+        raise HTTPException(status_code=502, detail={"code": f"INVALID_{service}_RESPONSE"})
     if response.is_error:
         detail = payload.get("detail", {})
         detail = detail if isinstance(detail, dict) else {}
         raise HTTPException(
             status_code=response.status_code,
             detail={
-                "code": detail.get("code", "INGESTION_REQUEST_FAILED"),
+                "code": detail.get("code", f"{service}_REQUEST_FAILED"),
                 **({"message": detail["message"]} if "message" in detail else {}),
             },
         )
     return response.status_code, payload
+
+
+async def _call_ingestion(
+    method: str,
+    path: str,
+    *,
+    headers: dict[str, str] | None = None,
+    params: dict[str, Any] | None = None,
+    files: dict[str, tuple[str, bytes, str]] | None = None,
+    data: dict[str, str] | None = None,
+    json_body: Any = None,
+) -> tuple[int, dict[str, Any]]:
+    return await _call_internal_service(
+        settings.ingestion_service_url,
+        "INGESTION",
+        method,
+        path,
+        headers=headers,
+        params=params,
+        files=files,
+        data=data,
+        json_body=json_body,
+    )
+
+
+async def _call_ai_knowledge(
+    method: str,
+    path: str,
+    *,
+    params: dict[str, Any] | None = None,
+    json_body: Any = None,
+) -> tuple[int, dict[str, Any]]:
+    return await _call_internal_service(
+        settings.ai_knowledge_service_url,
+        "AI_KNOWLEDGE",
+        method,
+        path,
+        params=params,
+        json_body=json_body,
+    )
 
 
 @router.post("/auth/login")
@@ -696,5 +741,19 @@ async def get_project_defect(
         "GET",
         f"/internal/projects/{project_id}/defects/{ado_id}",
         headers={},
+    )
+    try:
+        _, rca_result = await _call_ai_knowledge(
+            "GET", f"/internal/projects/{project_id}/defects/{ado_id}/rca"
+        )
+    except HTTPException as exc:
+        if exc.status_code not in (502, 503):
+            raise
+        result["rca"] = None
+        result["rca_unavailable"] = True
+        return result
+    rca = rca_result.get("rca")
+    result["rca"] = (
+        await enrich_rca(database, project_id, rca) if isinstance(rca, dict) else None
     )
     return result

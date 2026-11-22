@@ -19,6 +19,22 @@ class Settings(BaseSettings):
     login_max_failures: int = Field(default=5, ge=1, le=100)
     login_lockout_minutes: int = Field(default=15, ge=1, le=1_440)
     rate_limit_requests_per_minute: int = Field(default=120, ge=1, le=10_000)
+    env: str = "dev"
+    ai_knowledge_service_url: str = "http://127.0.0.1:8002"
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_timeout_seconds: float = Field(default=60.0, ge=1, le=600)
+    groq_max_retries: int = Field(default=3, ge=0, le=10)
+    groq_reasoning_effort: str = "medium"
+    llm_daily_call_cap: int = Field(default=500, ge=1, le=100_000)
+    # Per Groq request: estimated prompt + expected output is packed up to the target;
+    # prompt + max_completion_tokens never exceeds the budget (the rest is headroom).
+    llm_request_token_budget: int = Field(default=4_500, ge=2_000, le=32_000)
+    llm_batch_target_tokens: int = Field(default=4_000, ge=1_500, le=32_000)
+    llm_output_tokens_per_defect: int = Field(default=400, ge=100, le=4_000)
+    llm_max_defects_per_batch: int = Field(default=8, ge=1, le=25)
+    max_analysis_batch: int = Field(default=200, ge=1, le=1_000)
 
     model_config = SettingsConfigDict(
         env_file=".env",
