@@ -44,3 +44,30 @@ pytest
 ruff check .
 mypy libs services
 ```
+
+## Phase 2 — Authentication and roles
+
+Phase 2 adds local Argon2id accounts, first-login password changes, lockout,
+server-backed signed sessions, CSRF protection, per-project roles, Admin user
+management, audit records, request rate limiting, and security headers.
+
+1. Set `SESSION_SIGNING_KEY` in `.env` to a random value of at least 32 bytes.
+2. Apply the authentication indexes:
+
+```bash
+python migrations/002_authentication.py
+```
+
+3. Bootstrap the first project and Admin interactively (the password is read
+   without echoing):
+
+```bash
+python -m services.api_gateway.app.bootstrap_admin
+```
+
+The Admin can create projects, users, and project roles through `/api/v1`.
+Newly created users receive a one-time temporary password and must change it at
+their first sign-in. Session cookies are Secure by default; set
+`SESSION_COOKIE_SECURE=false` only for local HTTP development.
+MFA is not included because the architecture document leaves that requirement
+pending an owner decision.
