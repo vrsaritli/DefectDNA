@@ -1,0 +1,475 @@
+{
+  "rag": true,
+  "retrieval": {
+    "cases_with_retrieval": 39,
+    "mean_retrieved": 2.02,
+    "cases_citing": 18,
+    "citation_validity": 1.0
+  },
+  "run_at": "2026-11-22T09:46:35+00:00",
+  "duration_seconds": 364.0,
+  "golden_set": "golden_set.json",
+  "model": "openai/gpt-oss-120b",
+  "prompt_version": "rca-v2",
+  "reasoning_effort": "medium",
+  "taxonomy_version": 1,
+  "taxonomy_kinds": [
+    "root_causes",
+    "sdlc_phases",
+    "testing_gaps"
+  ],
+  "scored_fields": [
+    "root_cause_code"
+  ],
+  "scores": {
+    "cases": 42,
+    "ai_proposed": 42,
+    "needs_manual_rca": 0,
+    "needs_manual_reasons": {},
+    "taxonomy_conformance": 1.0,
+    "match_rate": 0.2143,
+    "per_field_accuracy": {
+      "root_cause_code": 0.2143
+    },
+    "accuracy_on_proposed": 0.2143,
+    "mean_confidence": 0.7867,
+    "calibration": {
+      "confidence>=0.8": {
+        "n": 25,
+        "accuracy": 0.28
+      },
+      "confidence<0.8": {
+        "n": 17,
+        "accuracy": 0.1176
+      }
+    },
+    "retried_items": 0,
+    "root_cause_confusion": {
+      "CODE": {
+        "CODE": 5,
+        "THIRD_PARTY": 2,
+        "CONFIGURATION": 1
+      },
+      "CONFIGURATION": {
+        "DEPLOYMENT": 1,
+        "TEST_GAP": 1,
+        "REQUIREMENTS": 2,
+        "CONFIGURATION": 2,
+        "INTEGRATION": 1,
+        "CODE": 2
+      },
+      "DATA": {
+        "REQUIREMENTS": 1,
+        "CODE": 1,
+        "DESIGN": 2,
+        "DATA": 2
+      },
+      "INTEGRATION": {
+        "DATA": 1,
+        "CODE": 3,
+        "REQUIREMENTS": 1
+      },
+      "REQUIREMENTS": {
+        "DATA": 1,
+        "CONFIGURATION": 1
+      },
+      "TEST_GAP": {
+        "CODE": 3,
+        "CONFIGURATION": 2,
+        "DATA": 1,
+        "REQUIREMENTS": 1,
+        "THIRD_PARTY": 1
+      },
+      "THIRD_PARTY": {
+        "DATA": 1,
+        "INTEGRATION": 1,
+        "TEST_GAP": 1,
+        "REQUIREMENTS": 1
+      }
+    },
+    "mismatches": [
+      {
+        "id": "ADO-326",
+        "expected": {
+          "root_cause_code": "TEST_GAP"
+        },
+        "predicted": {
+          "root_cause_code": "CODE"
+        },
+        "confidence": 0.78,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-337",
+        "expected": {
+          "root_cause_code": "CONFIGURATION"
+        },
+        "predicted": {
+          "root_cause_code": "DEPLOYMENT"
+        },
+        "confidence": 0.71,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-368",
+        "expected": {
+          "root_cause_code": "CONFIGURATION"
+        },
+        "predicted": {
+          "root_cause_code": "TEST_GAP"
+        },
+        "confidence": 0.6,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-397",
+        "expected": {
+          "root_cause_code": "TEST_GAP"
+        },
+        "predicted": {
+          "root_cause_code": "CONFIGURATION"
+        },
+        "confidence": 0.7,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-402",
+        "expected": {
+          "root_cause_code": "INTEGRATION"
+        },
+        "predicted": {
+          "root_cause_code": "DATA"
+        },
+        "confidence": 0.8,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-435",
+        "expected": {
+          "root_cause_code": "CONFIGURATION"
+        },
+        "predicted": {
+          "root_cause_code": "REQUIREMENTS"
+        },
+        "confidence": 0.7,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-462",
+        "expected": {
+          "root_cause_code": "REQUIREMENTS"
+        },
+        "predicted": {
+          "root_cause_code": "DATA"
+        },
+        "confidence": 0.85,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-485",
+        "expected": {
+          "root_cause_code": "CONFIGURATION"
+        },
+        "predicted": {
+          "root_cause_code": "REQUIREMENTS"
+        },
+        "confidence": 0.6,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-501",
+        "expected": {
+          "root_cause_code": "TEST_GAP"
+        },
+        "predicted": {
+          "root_cause_code": "DATA"
+        },
+        "confidence": 0.85,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-550",
+        "expected": {
+          "root_cause_code": "TEST_GAP"
+        },
+        "predicted": {
+          "root_cause_code": "REQUIREMENTS"
+        },
+        "confidence": 0.8,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-576",
+        "expected": {
+          "root_cause_code": "INTEGRATION"
+        },
+        "predicted": {
+          "root_cause_code": "CODE"
+        },
+        "confidence": 0.85,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-582",
+        "expected": {
+          "root_cause_code": "CODE"
+        },
+        "predicted": {
+          "root_cause_code": "THIRD_PARTY"
+        },
+        "confidence": 0.85,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-601",
+        "expected": {
+          "root_cause_code": "REQUIREMENTS"
+        },
+        "predicted": {
+          "root_cause_code": "CONFIGURATION"
+        },
+        "confidence": 0.7,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-628",
+        "expected": {
+          "root_cause_code": "DATA"
+        },
+        "predicted": {
+          "root_cause_code": "REQUIREMENTS"
+        },
+        "confidence": 0.85,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-633",
+        "expected": {
+          "root_cause_code": "TEST_GAP"
+        },
+        "predicted": {
+          "root_cause_code": "THIRD_PARTY"
+        },
+        "confidence": 0.7,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-635",
+        "expected": {
+          "root_cause_code": "INTEGRATION"
+        },
+        "predicted": {
+          "root_cause_code": "CODE"
+        },
+        "confidence": 0.78,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-640",
+        "expected": {
+          "root_cause_code": "DATA"
+        },
+        "predicted": {
+          "root_cause_code": "CODE"
+        },
+        "confidence": 0.75,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-641",
+        "expected": {
+          "root_cause_code": "CONFIGURATION"
+        },
+        "predicted": {
+          "root_cause_code": "INTEGRATION"
+        },
+        "confidence": 0.8,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-642",
+        "expected": {
+          "root_cause_code": "DATA"
+        },
+        "predicted": {
+          "root_cause_code": "DESIGN"
+        },
+        "confidence": 0.85,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-645",
+        "expected": {
+          "root_cause_code": "TEST_GAP"
+        },
+        "predicted": {
+          "root_cause_code": "CONFIGURATION"
+        },
+        "confidence": 0.6,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-657",
+        "expected": {
+          "root_cause_code": "CODE"
+        },
+        "predicted": {
+          "root_cause_code": "CONFIGURATION"
+        },
+        "confidence": 0.8,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-675",
+        "expected": {
+          "root_cause_code": "INTEGRATION"
+        },
+        "predicted": {
+          "root_cause_code": "CODE"
+        },
+        "confidence": 0.85,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-682",
+        "expected": {
+          "root_cause_code": "THIRD_PARTY"
+        },
+        "predicted": {
+          "root_cause_code": "DATA"
+        },
+        "confidence": 0.6,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-711",
+        "expected": {
+          "root_cause_code": "CODE"
+        },
+        "predicted": {
+          "root_cause_code": "THIRD_PARTY"
+        },
+        "confidence": 0.7,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-322",
+        "expected": {
+          "root_cause_code": "THIRD_PARTY"
+        },
+        "predicted": {
+          "root_cause_code": "INTEGRATION"
+        },
+        "confidence": 0.78,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-355",
+        "expected": {
+          "root_cause_code": "THIRD_PARTY"
+        },
+        "predicted": {
+          "root_cause_code": "TEST_GAP"
+        },
+        "confidence": 0.8,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-370",
+        "expected": {
+          "root_cause_code": "CONFIGURATION"
+        },
+        "predicted": {
+          "root_cause_code": "CODE"
+        },
+        "confidence": 0.93,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-532",
+        "expected": {
+          "root_cause_code": "CONFIGURATION"
+        },
+        "predicted": {
+          "root_cause_code": "CODE"
+        },
+        "confidence": 0.85,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-578",
+        "expected": {
+          "root_cause_code": "DATA"
+        },
+        "predicted": {
+          "root_cause_code": "DESIGN"
+        },
+        "confidence": 0.75,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-614",
+        "expected": {
+          "root_cause_code": "INTEGRATION"
+        },
+        "predicted": {
+          "root_cause_code": "REQUIREMENTS"
+        },
+        "confidence": 0.8,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-655",
+        "expected": {
+          "root_cause_code": "TEST_GAP"
+        },
+        "predicted": {
+          "root_cause_code": "CODE"
+        },
+        "confidence": 0.8,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-714",
+        "expected": {
+          "root_cause_code": "TEST_GAP"
+        },
+        "predicted": {
+          "root_cause_code": "CODE"
+        },
+        "confidence": 0.9,
+        "failure_reason": null
+      },
+      {
+        "id": "ADO-718",
+        "expected": {
+          "root_cause_code": "THIRD_PARTY"
+        },
+        "predicted": {
+          "root_cause_code": "REQUIREMENTS"
+        },
+        "confidence": 0.8,
+        "failure_reason": null
+      }
+    ]
+  },
+  "tokens": {
+    "requests": 17,
+    "failed_requests": 0,
+    "batch_sizes": {
+      "2": 9,
+      "3": 8
+    },
+    "request_budget": 4500,
+    "batch_target": 4000,
+    "total_tokens": {
+      "sum": 60786,
+      "mean": 3576,
+      "max": 4236,
+      "min": 2906
+    },
+    "prompt_tokens_mean": 2418,
+    "completion_tokens_mean": 1157,
+    "requests_over_budget": 0
+  }
+}

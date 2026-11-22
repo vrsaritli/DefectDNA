@@ -57,3 +57,17 @@ Same golden set, `rca-v2` prompt, no knowledge base: **19.0%** (8/42), 100%
 conformance, 15 requests of 3 defects, mean 3,206 / max 3,535 tokens. The one-case
 difference from rca-v1 is within noise. The RAG comparison (`--rag`) needs
 `COHERE_API_KEY` and has not been run yet.
+### rca-v2 with RAG (leave-one-out) — 2026-11-22
+
+Each case grounded on the other 41 golden cases (Cohere `embed-english-v3.0`, top-k 5,
+threshold 0.5): **21.4%** (9/42), against 19.0% without RAG. 39/42 cases retrieved at
+least one similar case (mean 2.0); the AI cited cases for 18. Citation validity 100%
+(every cited case was retrieved for that defect). 17 requests, mean 3,576 / max 4,236
+tokens, none over the 4,500 ceiling.
+
+The gain is within noise, as expected from the labels: each case's most similar
+neighbour carries the same golden root cause in only 7 of 42 cases, so retrieved
+"confirmed" labels often contradict each other. RAG can only help once the golden and
+seed labels are consistent; re-run this comparison after a QA Lead confirms them.
+
+Report: [reports/20261122T095239Z-rca-v2-medium-rag.md](reports/20261122T095239Z-rca-v2-medium-rag.md)
