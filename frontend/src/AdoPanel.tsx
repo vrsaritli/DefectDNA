@@ -233,8 +233,8 @@ export function AdoPanel({
           <input checked={includeComments} onChange={(event) => setIncludeComments(event.target.checked)} type="checkbox" />
           <span className="switch-track" aria-hidden="true" />
           Include every comment
-          <span className="muted small-print">(full discussion history; comments carry most root-cause evidence)</span>
         </label>
+        <p className="field-help">Full discussion history; comments usually carry the root-cause evidence.</p>
 
         {mode === "query" && (
           <label>

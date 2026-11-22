@@ -259,7 +259,8 @@ retrieval test. This completes the phase:
 - **Reopen:** `POST /rcas/{id}/reopen` returns a reviewed RCA to the AI proposal and
   removes it from the knowledge base and trends. `"reopen": true` on a review changes
   a confirmed RCA in place.
-- **Seed import:** QA Leads upload historical defects with a confirmed-RCA column
+- **Knowledge ingestion (Admin only, Ingestion page):** pick **Excel file** or **Azure DevOps query**.
+  From Excel: historical defects with a confirmed-RCA column
   (`Root Cause (RCA)`; optional `SDLC Phase (RCA)` and `Testing Gap`) on the Import tab.
   Defects are imported as usual, labels are mapped to taxonomy codes (by code or label;
   "Code - Front-end" falls back to "Code"), and each becomes an approved RCA
@@ -280,13 +281,15 @@ retrieval test. This completes the phase:
    index `knowledge_vector_index` (cosine, filters `project_id`, `status`, `module`).
 3. Restart the ai-knowledge-service and its worker. The worker log shows
    `rag: enabled`.
-4. Seed the knowledge base (Import tab → **Seed confirmed RCAs**), then run analysis.
+4. As an Admin, fill the knowledge base (**Ingestion** page → Excel file or Azure DevOps
+   query), then run analysis.
 
 ### Endpoints
 
 | Method | Endpoint | Purpose | Min role |
 |---|---|---|---|
-| POST | `/projects/{pid}/knowledge/seed` | Seed import (multipart `file`) | QA Lead |
+| POST | `/projects/{pid}/knowledge/seed` | Knowledge ingestion from Excel (multipart `file`) | Admin |
+| POST | `/projects/{pid}/knowledge/seed-ado` | Knowledge ingestion from an ADO saved query (reads the `RCA` field) | Admin |
 | POST | `/projects/{pid}/knowledge/retrieve` | `{"text": "..."}`: cases a text would be grounded on | QA Lead |
 | GET | `/projects/{pid}/knowledge/stats` | Entry counts, pending embeddings, RAG on/off | Viewer |
 | POST | `/projects/{pid}/knowledge/reembed` | Re-embed job | QA Lead |
@@ -352,3 +355,16 @@ npm run e2e
 Release approver (P5), monitoring tool (P6), data-handling approval for real defect text
 (P1), confirmed golden-set labels (P7), retention (P9), MFA (P10). See
 [release readiness](docs/release-readiness.md).
+### UI refresh and Admin knowledge ingestion
+
+- **Enterprise UI:** sidebar shell (brand, project switcher, Workspace and Administration
+  navigation, user card with role and sign-out), page header with breadcrumb,
+  split-screen sign-in, and one design-token stylesheet (slate neutrals, indigo primary,
+  status colours paired with text, `lucide-react` icons; no external fonts or CDNs).
+- **Ingestion page (Admin only):** loads historical defects with a confirmed root cause
+  into the MongoDB knowledge base. A radio choice selects the source:
+  - **Excel file:** XLSX/CSV with ID, Title and `Root Cause (RCA)`.
+  - **Azure DevOps query:** a saved query link; the RCA field is found by name
+    (`Root Cause (RCA)`, then `RCA`, which is `Custom.RCA` in the demo project).
+  The report shows defects read, confirmed, ingested, already reviewed, and labels that
+  are not in the taxonomy.

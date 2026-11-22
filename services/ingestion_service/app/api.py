@@ -597,3 +597,102 @@ async def ado_pull(
         "comments": sum(len(d["comments"]) for d in defects if isinstance(d.get("comments"), list)),
         "states": dict(Counter(str(defect.get("state") or "Unknown") for defect in defects)),
     }
+
+RCA_FIELD_CANDIDATES = ("Root Cause (RCA)", "RCA", "Root Cause")
+
+
+class AdoSeedPullRequest(AdoPullRequest):
+    rca_field: str | None = Field(default=None, max_length=200)
+
+
+@router.post("/internal/ado-seed-pull")
+async def ado_seed_pull(
+    request: Request,
+    body: AdoSeedPullRequest,
+    project_id: Annotated[str, Header(alias="X-Project-ID")],
+    user_id: Annotated[str, Header(alias="X-User-ID")],
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Pull defects from ADO with their confirmed root cause (the RCA field) for the knowledge base."""
+    _require_gateway(authorization)
+    _validate_project_id(project_id)
+    source = _ado_source(body)
+    try:
+        candidates = (body.rca_field,) if body.rca_field else RCA_FIELD_CANDIDATES
+        rca_ref = None
+        for candidate in candidates:
+            rca_ref = await source.find_field(candidate)
+            if rca_ref:
+                break
+        if rca_ref is None:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "ADO_RCA_FIELD_NOT_FOUND",
+                    "message": f"No ADO field named {' / '.join(candidates)} in this project",
+                },
+            )
+        extra = (rca_ref,)
+        if body.mode == "query":
+            defects = await source.fetch_saved_query(
+                query_id_from_link(body.query_link or ""),
+                include_comments=body.include_comments,
+                extra_fields=extra,
+            )
+        elif body.mode == "ids":
+            defects = await source.fetch_by_ids(
+                parse_work_item_ids(body.work_item_ids or ""),
+                include_comments=body.include_comments,
+                extra_fields=extra,
+            )
+        else:
+            if body.start_date is None or body.end_date is None or body.start_date > body.end_date:
+                raise HTTPException(status_code=422, detail={"code": "INVALID_DATE_RANGE"})
+            defects = await source.fetch_closed_defects(
+                body.start_date,
+                body.end_date,
+                include_comments=body.include_comments,
+                extra_fields=extra,
+            )
+    except AdoInputError as exc:
+        raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)}) from exc
+    except httpx.HTTPError as exc:
+        raise _ado_http_error(exc) from exc
+    finally:
+        await source.close()
+
+    confirmed = []
+    for defect in defects:
+        value = (defect.pop("_extra", {}) or {}).get(rca_ref)
+        label = str(value).strip() if value is not None else ""
+        if label:
+            confirmed.append({"defect": dict(defect), "labels": {"root_cause": label}})
+
+    database = _database(request)
+    batch_id = await _create_batch(
+        database,
+        project_id=project_id,
+        source="ADO_API",
+        filename=None,
+        row_count=len(defects),
+        defects=defects,
+        errors=[],
+        user_id=_validate_user_id(user_id),
+    )
+    upserted = await _upsert_defects(database, project_id, batch_id, defects)
+    await _create_completed_job(
+        database,
+        project_id=project_id,
+        job_type="ado_sync",
+        batch_id=batch_id,
+        total=len(defects),
+        succeeded=len(defects),
+        errors=[],
+    )
+    return {
+        "import_batch_id": str(batch_id),
+        "preview": {"rows_total": len(defects), "rows_valid": len(defects), "row_errors": []},
+        "upserted": upserted,
+        "rca_columns": {"root_cause": rca_ref},
+        "confirmed": confirmed,
+    }

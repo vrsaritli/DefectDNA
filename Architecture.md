@@ -83,6 +83,7 @@ Roles are assigned **per project**. A user may be QA Lead on one project and Vie
 | View dashboard, defects, RCAs, trends | ✔ | ✔ | ✔ |
 | Export data | ✔ | ✔ | ✔ |
 | Upload CSV/XLSX, trigger ADO sync, trigger analysis | ✘ | ✔ | ✔ |
+| Knowledge ingestion: load confirmed RCAs from Excel or an ADO query into the knowledge base | ✘ | ✘ | ✔ |
 | Approve / correct an RCA | ✘ | ✔ | ✘* |
 | Manage taxonomies, accept `Other` categories | ✘ | ✔ | ✔ |
 | Manage users and roles | ✘ | ✘ | ✔ |
@@ -255,8 +256,10 @@ sequenceDiagram
   5. **RCA review** (defect details on the left; proposed RCA, confidence and rationale on the right; cited past cases below; Approve / Correct form)
   6. **Trends** (counts by module, release, month; charts and table; export)
   7. **Admin** (users, roles, taxonomies, ADO connection, data deletion)
+  8. **Knowledge ingestion** (Admin only): radio choice of source, Excel file or Azure DevOps saved query; confirmed root causes (column `Root Cause (RCA)` or the ADO `RCA` field) become approved knowledge entries in MongoDB
+- **Shell (as built):** left sidebar (brand, project switcher, Workspace and Administration navigation, user card with role and sign-out) plus a page header with breadcrumb; split-screen sign-in.
 - **Security in the UI:** render all defect text as plain text (no raw HTML); role-based menu hiding is cosmetic only, as the gateway enforces authorization.
-- **Design system:** none mandated (assumed; confirm).
+- **Design system (as built):** in-app tokens in `frontend/src/style.css` (slate neutrals, indigo primary, navy sidebar, 8/12 px radii, status colours always paired with text), `lucide-react` icons, layout pattern after shadcn-admin. No external fonts or CDNs.
 
 ## 15. Backend Architecture
 
@@ -532,7 +535,14 @@ erDiagram
 | GET | `/projects/{pid}/rcas` | List RCAs (filter by status) | Viewer |
 | GET | `/rcas/{rca_id}` | RCA detail with cited cases | Viewer |
 | POST | `/rcas/{rca_id}/review` | Approve or correct | QA Lead |
-| POST | `/projects/{pid}/knowledge/seed` | Seed import of reviewed defects with confirmed RCAs | QA Lead |
+| POST | `/projects/{pid}/knowledge/seed` | Knowledge ingestion from Excel/CSV with a confirmed RCA column | Admin |
+| POST | `/projects/{pid}/knowledge/seed-ado` | Knowledge ingestion from an ADO saved query, reading the RCA field | Admin |
+| GET/PUT | `/projects/{pid}/ado-connection` | Live ADO status with the server PAT / set organization and project | QA Lead / Admin |
+| POST | `/projects/{pid}/ado-pull` | Pull defects by saved query link, work item IDs or closed-by-date, with comments | QA Lead |
+| POST | `/rcas/{id}/reopen` | Undo a review (out of knowledge base and trends) | QA Lead |
+| GET | `/projects/{pid}/knowledge/stats` | Knowledge base size, pending embeddings, RAG on/off | Viewer |
+| POST | `/projects/{pid}/knowledge/reembed` | Re-embed job | QA Lead |
+| GET | `/projects/{pid}/ops` | Operations metrics and alerts | Admin |
 | GET | `/projects/{pid}/taxonomy` | Current taxonomy | Viewer |
 | PUT | `/projects/{pid}/taxonomy` | Update taxonomy (new version) | QA Lead |
 | GET | `/projects/{pid}/trends` | Counts by module, release, month | Viewer |
@@ -689,7 +699,7 @@ Errors: `403`, `404`, `409`, `422 UNKNOWN_TAXONOMY_CODE`, `502 EMBEDDING_PROVIDE
 - **Background jobs:** MongoDB `jobs` collection; workers claim atomically with `findOneAndUpdate`, set a lease, update progress, and renew or release the lease. Expired leases are re-claimed. Items are processed idempotently.
 - **Scheduled tasks:** APScheduler in the ingestion worker for an optional nightly/weekly ADO sync; trend facts are updated per approval (no scheduled refresh needed).
 - **Exports:** generated on demand as CSV or XLSX streams (no stored files).
-- **Seed import:** a QA Lead uploads defects with confirmed RCA columns; they go straight to `APPROVED` and into the knowledge base (`source = SEED_IMPORT`) after validation against the taxonomy.
+- **Knowledge ingestion (seed import):** an **Admin** loads historical defects whose root cause QA already confirmed, from an Excel/CSV file (column `Root Cause (RCA)`; optional `SDLC Phase (RCA)`, `Testing Gap`) or from an Azure DevOps saved query (the project's `RCA` field, found by name). Labels are mapped to taxonomy codes, unmapped labels are reported, and each defect becomes an `APPROVED` RCA plus an embedded knowledge entry (`source = SEED_IMPORT`). Admin-only because ingested RCAs skip QA review; ingested RCAs count in trends but not in the AI-agreement rate.
 
 ## 25. Error Handling
 
@@ -725,6 +735,8 @@ Errors: `403`, `404`, `409`, `422 UNKNOWN_TAXONOMY_CODE`, `502 EMBEDDING_PROVIDE
 
 ## 28. CI/CD Architecture
 
+> **Decided (owner, 2026-11-22):** no containers and no cloud CI/CD. Checks run locally with `scripts/check.ps1` (ruff, mypy, pytest, pip-audit, npm audit, frontend build, Playwright E2E) before a release is tagged in git; releases deploy with `scripts/migrate.ps1` and `scripts/start.ps1`, and roll back by checking out the previous tag (`docs/runbooks/deploy-and-rollback.md`). The pipeline below is kept as the original proposal.
+
 *(CD16; Git platform and CI tool **[PENDING]**.)*
 
 ```mermaid
@@ -745,6 +757,8 @@ flowchart LR
 - Secrets are injected at deploy time, never baked into images.
 
 ## 29. Cloud Deployment Architecture
+
+> **Decided (owner, 2026-11-22):** DefectDNA runs directly on a Windows machine or server (four Python services, two workers and the frontend), against MongoDB Atlas. Docker images are not used. The diagram below is kept as the original proposal.
 
 **Status: PENDING.** The platform behind the microservices mandate is unconfirmed, and the owner asked to keep this simple. The architecture assumes only:
 
@@ -995,10 +1009,10 @@ defectdna/
 | # | Decision | Needed by |
 |---|---|---|
 | P1 | Approval to send defect text to Groq and Cohere (data-handling gate) | Before real data |
-| P2 | Deployment platform behind the microservices mandate; whether the four-service split fits | Phase 7 (earlier if it affects the split) |
+| P2 | ~~Deployment platform~~ **Decided:** run locally on Windows, no containers, no cloud CI/CD (2026-11-22) | Phase 7 (earlier if it affects the split) |
 | P3 | Email service for invites/resets (else temporary-password flow); user count | Phase 2 |
 | P4 | ADO authorization (read-only PAT or service principal) | Phase 3 |
-| P5 | Git platform, CI tool, production release approver | Phase 1 |
+| P5 | Git platform (**decided: GitHub, local checks, no cloud CI**), production release approver (**open**) | Phase 1 |
 | P6 | Mandated logging/monitoring tools | Phase 7 |
 | P7 | Golden-set defects with confirmed RCAs | Phase 4 |
 | P8 | Existing RCA category list | Phase 4 |
@@ -1067,3 +1081,18 @@ defectdna/
 - **Scalability risks:** none at the stated scale; growth path in §37.
 - **Gaps:** items P1–P12 in §36.
 - **Refinement vs. earlier discussion:** `trend_snapshots` replaced by `trend_facts` to keep the trends-service independent; the review workflow is orchestrated by the gateway but committed by the ai-knowledge-service.
+
+
+## Appendix C — Implementation status (2026-11-22)
+
+| Phase | Status on `main` | Notes and deviations from this document |
+|---|---|---|
+| 1 Foundation | Done | Shared library, four services, MongoDB job queue, service tokens, JSON logs |
+| 2 Authentication and roles | Done | Local accounts, Argon2id, lockout, sessions, CSRF, per-project roles, audit |
+| 3 Ingestion | Done | CSV/XLSX import; ADO pull by saved query link, work item IDs or closed-by-date, with every comment; the PAT stays on the server and is only sent to ADO hosts |
+| 4 AI RCA slice | Done | Groq `gpt-oss-120b`, strict JSON schema, scrubbing, batches capped at 4,500 tokens per request, golden-set runner |
+| 5 Knowledge base and RAG | Done | Cohere `embed-english-v3.0` (1,024 dims), Atlas vector index with in-process fallback, citations validated, similarity threshold calibrated to 0.5; knowledge ingestion is **Admin-only** (Excel or ADO query) instead of QA Lead |
+| 6 Trends, dashboard, export | Done | Approve/correct/reopen review flow, trends service, dashboard, CSV/XLSX export with formula neutralisation |
+| 7 Hardening and release | Done (local) | Delete-project-data job, Operations view and alert CLI, correlation IDs, production guard, quotas, runbooks, OWASP API checklist, Playwright E2E; **no containers or cloud CI/CD** (§28, §29) |
+
+Golden-set results so far: 16.7% (rca-v1), 19.0% (rca-v2), 21.4% (rca-v2 with RAG). The golden labels contradict the developers' own comments in the sample data, so accuracy needs re-measuring on a QA-confirmed set (P7). Release readiness against §38: `docs/release-readiness.md`.

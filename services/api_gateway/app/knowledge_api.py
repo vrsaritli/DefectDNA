@@ -1,7 +1,8 @@
 """Phase 5 gateway routes: knowledge-base seed import, retrieval debug, stats, re-embed."""
 
 import re
-from typing import Any
+from datetime import date
+from typing import Any, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -71,15 +72,8 @@ async def seed_knowledge(
     file: UploadFile = File(...),  # noqa: B008 - FastAPI form declaration
     mapping: str | None = Form(default=None),
 ) -> dict[str, Any]:
-    """Seed import: defects with QA-confirmed RCA columns go straight into the knowledge base."""
-    # Seeds become APPROVED RCAs, so they follow the approval rule (§8): QA Lead only.
-    await core._require_project_role(project_id, current, database, {"QA_LEAD"})
-    await enforce_quota(
-        database,
-        scope=f"upload:{current['user']['_id']}",
-        limit=settings.upload_quota_per_hour,
-        window_seconds=3600,
-    )
+    """Knowledge ingestion from Excel/CSV: defects with a confirmed RCA column (Admin only)."""
+    await _require_ingestion_admin(project_id, current, database)
     content = await file.read(settings.max_import_file_bytes + 1)
     if len(content) > settings.max_import_file_bytes:
         raise HTTPException(status_code=413, detail={"code": "FILE_TOO_LARGE"})
@@ -96,7 +90,57 @@ async def seed_knowledge(
         },
         data={"mapping": mapping} if mapping is not None else None,
     )
+    return await _seed_confirmed(database, project_id, current, imported, source="EXCEL")
 
+
+class AdoIngestBody(BaseModel):
+    mode: Literal["query", "ids", "closed"] = "query"
+    query_link: str | None = Field(default=None, max_length=2_000)
+    work_item_ids: str | None = Field(default=None, max_length=50_000)
+    start_date: date | None = None
+    end_date: date | None = None
+    include_comments: bool = True
+    rca_field: str | None = Field(default=None, max_length=200)
+
+
+@router.post("/projects/{project_id}/knowledge/seed-ado")
+async def seed_knowledge_from_ado(
+    project_id: str,
+    body: AdoIngestBody,
+    current: CurrentUserDependency,
+    database: DatabaseDependency,
+) -> dict[str, Any]:
+    """Knowledge ingestion from an ADO query, reading the confirmed root cause field (Admin only)."""
+    await _require_ingestion_admin(project_id, current, database)
+    saved = (await database["projects"].find_one({"_id": project_id}, {"ado": 1}) or {}).get("ado") or {}
+    _, imported = await core._call_ingestion(
+        "POST",
+        "/internal/ado-seed-pull",
+        headers={"X-Project-ID": project_id, "X-User-ID": str(current["user"]["_id"])},
+        json_body={
+            **body.model_dump(mode="json"),
+            "organization": saved.get("organization"),
+            "project": saved.get("project"),
+        },
+    )
+    return await _seed_confirmed(database, project_id, current, imported, source="ADO_QUERY")
+
+
+async def _require_ingestion_admin(project_id: str, current: Any, database: Any) -> None:
+    # Ingested RCAs become APPROVED knowledge without review, so only project Admins may run it.
+    await core._require_project_role(project_id, current, database, {"ADMIN"})
+    await enforce_quota(
+        database,
+        scope=f"upload:{current['user']['_id']}",
+        limit=settings.upload_quota_per_hour,
+        window_seconds=3600,
+    )
+
+
+async def _seed_confirmed(
+    database: Any, project_id: str, current: Any, imported: dict[str, Any], *, source: str
+) -> dict[str, Any]:
+    """Map confirmed labels to taxonomy codes and write them to the knowledge base."""
     taxonomy = await get_current_taxonomy(database, project_id)
     items: list[dict[str, Any]] = []
     unmapped: list[dict[str, Any]] = []
@@ -141,6 +185,7 @@ async def seed_knowledge(
         entity="knowledge_entries",
         entity_id=imported.get("import_batch_id"),
         detail={
+            "source": source,
             "rows_total": preview.get("rows_total", 0),
             "confirmed_rows": len(imported.get("confirmed", [])),
             "seeded": seeded.get("seeded", 0),
@@ -159,6 +204,7 @@ async def seed_knowledge(
         "knowledge_status": seeded.get("knowledge_status"),
         "unmapped": unmapped,
         "taxonomy_version": taxonomy.version,
+        "source": source,
     }
 
 

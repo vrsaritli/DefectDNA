@@ -131,11 +131,11 @@ def test_seed_import_maps_labels_and_reports_unmapped(
     _user(database, "lead@example.test", "QA_LEAD")
     upload = {"file": ("seed.xlsx", b"PK", "application/octet-stream")}
 
-    admin = _login(client, "admin@example.test")
-    assert client.post("/api/v1/projects/project-a/knowledge/seed", files=upload, headers=admin).status_code == 403
-
     lead = _login(client, "lead@example.test")
-    response = client.post("/api/v1/projects/project-a/knowledge/seed", files=upload, headers=lead)
+    assert client.post("/api/v1/projects/project-a/knowledge/seed", files=upload, headers=lead).status_code == 403
+
+    admin = _login(client, "admin@example.test")
+    response = client.post("/api/v1/projects/project-a/knowledge/seed", files=upload, headers=admin)
     assert response.status_code == 200
     report = response.json()
     assert report["seeded"] == 3

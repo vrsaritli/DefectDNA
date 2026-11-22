@@ -137,8 +137,29 @@ class AdoDefectSource:
         payload = response.json()
         return {"project_id": payload.get("id"), "project_name": payload.get("name")}
 
+    async def find_field(self, name: str) -> str | None:
+        """Reference name (e.g. ``Custom.RootCauseRCA``) for a field's display or reference name."""
+        response = await self.client.get(
+            f"{self.organization_url}/{self._project_path}/_apis/wit/fields",
+            params={"api-version": "7.1"},
+        )
+        response.raise_for_status()
+        wanted = name.strip().casefold()
+        for field in response.json().get("value", []):
+            if wanted in {
+                str(field.get("name", "")).casefold(),
+                str(field.get("referenceName", "")).casefold(),
+            }:
+                return str(field["referenceName"])
+        return None
+
     async def fetch_closed_defects(
-        self, start_date: date, end_date: date, *, include_comments: bool = False
+        self,
+        start_date: date,
+        end_date: date,
+        *,
+        include_comments: bool = False,
+        extra_fields: tuple[str, ...] = (),
     ) -> list[dict[str, Any]]:
         project = self.project.replace("'", "''")
         end_exclusive = date.fromordinal(end_date.toordinal() + 1)
@@ -157,11 +178,17 @@ class AdoDefectSource:
         )
         response.raise_for_status()
         return await self.fetch_by_ids(
-            _ids_from_wiql(response.json()), include_comments=include_comments
+            _ids_from_wiql(response.json()),
+            include_comments=include_comments,
+            extra_fields=extra_fields,
         )
 
     async def fetch_saved_query(
-        self, query_id: str, *, include_comments: bool = False
+        self,
+        query_id: str,
+        *,
+        include_comments: bool = False,
+        extra_fields: tuple[str, ...] = (),
     ) -> list[dict[str, Any]]:
         """Run a saved query (flat, tree or direct links) and fetch every result item."""
         response = await self.client.get(
@@ -170,12 +197,19 @@ class AdoDefectSource:
         )
         response.raise_for_status()
         return await self.fetch_by_ids(
-            _ids_from_wiql(response.json()), include_comments=include_comments
+            _ids_from_wiql(response.json()),
+            include_comments=include_comments,
+            extra_fields=extra_fields,
         )
 
     async def fetch_by_ids(
-        self, work_item_ids: list[int], *, include_comments: bool = False
+        self,
+        work_item_ids: list[int],
+        *,
+        include_comments: bool = False,
+        extra_fields: tuple[str, ...] = (),
     ) -> list[dict[str, Any]]:
+        """Work items as defects; values of ``extra_fields`` are returned under ``"_extra"``."""
         if len(work_item_ids) > _MAX_ITEMS:
             raise AdoInputError("ADO_TOO_MANY_ITEMS", f"More than {_MAX_ITEMS} work items")
         defects: list[dict[str, Any]] = []
@@ -185,17 +219,20 @@ class AdoDefectSource:
                 f"{self.organization_url}/_apis/wit/workitems",
                 params={
                     "ids": ",".join(str(item_id) for item_id in batch_ids),
-                    "fields": ",".join(_FIELDS),
+                    "fields": ",".join((*_FIELDS, *extra_fields)),
                     "errorPolicy": "omit",
                     "api-version": "7.1",
                 },
             )
             response.raise_for_status()
-            defects.extend(
-                _normalize_work_item(work_item)
-                for work_item in response.json().get("value", [])
-                if isinstance(work_item, dict) and work_item.get("id")
-            )
+            for work_item in response.json().get("value", []):
+                if not isinstance(work_item, dict) or not work_item.get("id"):
+                    continue
+                defect = _normalize_work_item(work_item)
+                if extra_fields:
+                    fields = work_item.get("fields", {})
+                    defect["_extra"] = {name: fields.get(name) for name in extra_fields}
+                defects.append(defect)
         if include_comments and defects:
             limiter = asyncio.Semaphore(_COMMENT_CONCURRENCY)
 
