@@ -391,6 +391,32 @@ async def defects_for_analysis(
     return {"defects": defects, "total_matching": total}
 
 
+class AdoRootCausesRequest(BaseModel):
+    ado_ids: list[int] = Field(max_length=2_000)
+
+
+@router.post("/internal/projects/{project_id}/defects/ado-root-causes")
+async def ado_root_causes(
+    request: Request,
+    project_id: str,
+    body: AdoRootCausesRequest,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """The root cause recorded in ADO for each defect that has one, keyed by ADO ID."""
+    _require_gateway(authorization)
+    _validate_project_id(project_id)
+    cursor = _database(request)["defects"].find(
+        {
+            "project_id": project_id,
+            "ado_id": {"$in": body.ado_ids},
+            "ado_root_cause": {"$nin": [None, ""]},
+        },
+        {"_id": 0, "ado_id": 1, "ado_root_cause": 1},
+    )
+    docs = await cursor.to_list(length=len(body.ado_ids) or 1)
+    return {"root_causes": {str(doc["ado_id"]): doc["ado_root_cause"] for doc in docs}}
+
+
 @router.get("/internal/projects/{project_id}/defects/{ado_id}")
 async def get_defect(
     request: Request,
@@ -568,20 +594,33 @@ async def ado_pull(
     _validate_project_id(project_id)
     source = _ado_source(body)
     try:
+        # The project's RCA field, when it has one, is kept as ado_root_cause.
+        rca_ref = None
+        for candidate in RCA_FIELD_CANDIDATES:
+            rca_ref = await source.find_field(candidate)
+            if rca_ref:
+                break
+        extra = (rca_ref,) if rca_ref else ()
         if body.mode == "query":
             defects = await source.fetch_saved_query(
-                query_id_from_link(body.query_link or ""), include_comments=body.include_comments
+                query_id_from_link(body.query_link or ""),
+                include_comments=body.include_comments,
+                extra_fields=extra,
             )
         elif body.mode == "ids":
             defects = await source.fetch_by_ids(
                 parse_work_item_ids(body.work_item_ids or ""),
                 include_comments=body.include_comments,
+                extra_fields=extra,
             )
         else:
             if body.start_date is None or body.end_date is None or body.start_date > body.end_date:
                 raise HTTPException(status_code=422, detail={"code": "INVALID_DATE_RANGE"})
             defects = await source.fetch_closed_defects(
-                body.start_date, body.end_date, include_comments=body.include_comments
+                body.start_date,
+                body.end_date,
+                include_comments=body.include_comments,
+                extra_fields=extra,
             )
     except AdoInputError as exc:
         raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)}) from exc
@@ -589,6 +628,11 @@ async def ado_pull(
         raise _ado_http_error(exc) from exc
     finally:
         await source.close()
+
+    for defect in defects:
+        value = (defect.pop("_extra", {}) or {}).get(rca_ref) if rca_ref else None
+        if value is not None and str(value).strip():
+            defect["ado_root_cause"] = str(value).strip()
 
     database = _database(request)
     batch_id = await _create_batch(
@@ -691,6 +735,7 @@ async def ado_seed_pull(
         value = (defect.pop("_extra", {}) or {}).get(rca_ref)
         label = str(value).strip() if value is not None else ""
         if label:
+            defect["ado_root_cause"] = label
             confirmed.append({"defect": dict(defect), "labels": {"root_cause": label}})
 
     database = _database(request)

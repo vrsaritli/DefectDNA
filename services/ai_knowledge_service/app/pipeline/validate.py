@@ -15,7 +15,23 @@ _FIELDS: dict[str, TaxonomyKind] = {
     "sdlc_phase_code": "sdlc_phases",
     "testing_gap_code": "testing_gaps",
 }
-_ITEM_KEYS = frozenset({*_FIELDS, "other_proposal", "confidence", "rationale"})
+_OPTIONAL_KEYS = frozenset({"other_proposal", "evidence_fields"})
+_ITEM_KEYS = frozenset({*_FIELDS, *_OPTIONAL_KEYS, "confidence", "rationale"})
+# Record sections a proposal may name as its evidence (rca-v3 ``evidence_fields``).
+EVIDENCE_FIELDS = frozenset(
+    {
+        "title",
+        "description",
+        "repro_steps",
+        "comments",
+        "tags",
+        "module",
+        "release",
+        "severity",
+        "priority",
+        "similar_cases",
+    }
+)
 MAX_OTHER_PROPOSAL_CHARS = 80
 
 
@@ -33,6 +49,7 @@ class RcaProposal:
     other_proposal: str | None
     confidence: float
     rationale: str
+    evidence_fields: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -65,7 +82,7 @@ def validate_item(
     keys = set(data)
     if keys - _ITEM_KEYS:
         raise ProposalValidationError("UNEXPECTED_FIELDS")
-    if _ITEM_KEYS - keys - {"other_proposal"}:
+    if _ITEM_KEYS - keys - _OPTIONAL_KEYS:
         raise ProposalValidationError("MISSING_FIELDS")
 
     codes: dict[str, str] = {}
@@ -99,6 +116,11 @@ def validate_item(
     if uses_other and not other:
         raise ProposalValidationError("OTHER_WITHOUT_PROPOSAL")
 
+    evidence = data.get("evidence_fields") or []
+    if not isinstance(evidence, list) or not all(isinstance(item, str) for item in evidence):
+        raise ProposalValidationError("INVALID_EVIDENCE_FIELDS")
+    evidence = [item for item in dict.fromkeys(evidence) if item in EVIDENCE_FIELDS]
+
     return RcaProposal(
         root_cause_code=codes["root_cause_code"],
         sdlc_phase_code=codes["sdlc_phase_code"],
@@ -106,6 +128,7 @@ def validate_item(
         other_proposal=other[:MAX_OTHER_PROPOSAL_CHARS] if uses_other else None,
         confidence=round(float(confidence), 4),
         rationale=rationale,
+        evidence_fields=evidence,
     )
 
 

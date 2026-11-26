@@ -5,6 +5,7 @@ import {
   api,
   errorMessage,
   type CaseView,
+  EVIDENCE_LABELS,
   type JobStatus,
   type KnowledgeStats,
   RCA_STATUS_LABELS,
@@ -113,7 +114,12 @@ export function Analysis({
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [correcting, setCorrecting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
-  const [draft, setDraft] = useState({ root_cause_code: "", sdlc_phase_code: "", testing_gap_code: "" });
+  // testing_gap_code is no longer shown; an existing value is carried over unchanged on edit.
+  const [draft, setDraft] = useState<{ root_cause_code: string; sdlc_phase_code: string; testing_gap_code: string | null }>({
+    root_cause_code: "",
+    sdlc_phase_code: "",
+    testing_gap_code: null,
+  });
   const [note, setNote] = useState("");
 
   const [knowledge, setKnowledge] = useState<KnowledgeStats | null>(null);
@@ -233,7 +239,7 @@ export function Analysis({
     setDraft({
       root_cause_code: source?.root_cause?.code ?? "",
       sdlc_phase_code: source?.sdlc_phase?.code ?? "",
-      testing_gap_code: source?.testing_gap?.code ?? "",
+      testing_gap_code: source?.testing_gap?.code ?? null,
     });
     setNote(rca.final?.note ?? "");
     setCorrecting(true);
@@ -437,8 +443,8 @@ export function Analysis({
               <tr>
                 <th>ID</th>
                 <th>Title</th>
-                <th>Root cause</th>
-                <th>Testing gap</th>
+                <th>AI proposed root cause</th>
+                <th>ADO root cause</th>
                 <th>Confidence</th>
                 <th>Status</th>
               </tr>
@@ -453,7 +459,7 @@ export function Analysis({
                   <td className="id-cell">#{rca.defect.ado_id}</td>
                   <td>{rca.defect.title || "—"}</td>
                   <td>{rca.proposed?.root_cause?.label ?? "—"}</td>
-                  <td>{rca.proposed?.testing_gap?.label ?? "—"}</td>
+                  <td>{rca.defect.ado_root_cause || "—"}</td>
                   <td>{rca.proposed ? `${Math.round(rca.proposed.confidence * 100)}%` : "—"}</td>
                   <td>
                     <span className={`rca-pill ${rca.status.toLowerCase()}`}>{RCA_STATUS_LABELS[rca.status]}</span>
@@ -523,9 +529,9 @@ export function Analysis({
               <h3 className="column-title">AI proposal</h3>
               {selected.proposed ? (
                 <>
-                  <Classification label="Root cause" value={selected.proposed.root_cause} />
+                  <Classification label="AI proposed root cause" value={selected.proposed.root_cause} />
+                  <Field label="ADO root cause" value={selected.defect.ado_root_cause ?? ""} />
                   <Classification label="SDLC phase introduced" value={selected.proposed.sdlc_phase} />
-                  <Classification label="Testing gap" value={selected.proposed.testing_gap} />
                   {selected.proposed.other_proposal && (
                     <Field label="Proposed new category" value={selected.proposed.other_proposal} />
                   )}
@@ -541,7 +547,22 @@ export function Analysis({
                       <span>{Math.round(selected.proposed.confidence * 100)}%</span>
                     </div>
                   </div>
-                  <Field label="Rationale" value={selected.proposed.rationale} />
+                  <div className="detail-field">
+                    <h3>Rationale</h3>
+                    <p className="preserve-lines">{selected.proposed.rationale || "—"}</p>
+                    <p className="evidence-line">
+                      <span className="muted">Based on:</span>{" "}
+                      {selected.proposed.evidence_fields?.length ? (
+                        selected.proposed.evidence_fields.map((field) => (
+                          <span className="evidence-chip" key={field}>
+                            {EVIDENCE_LABELS[field] ?? field}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="muted">not recorded for this proposal (re-analyze to see the sections used)</span>
+                      )}
+                    </p>
+                  </div>
                 </>
               ) : (
                 <p className="notice error">
@@ -577,7 +598,6 @@ export function Analysis({
               <div className="final-grid">
                 <Classification label="Root cause" value={selected.final.root_cause} />
                 <Classification label="SDLC phase introduced" value={selected.final.sdlc_phase} />
-                <Classification label="Testing gap" value={selected.final.testing_gap} />
               </div>
               {selected.final.note && <Field label="Reviewer note" value={selected.final.note} />}
             </div>
@@ -590,7 +610,6 @@ export function Analysis({
                 <div className="review-form-grid">
                   <CodeSelect label="Root cause" items={taxonomy.root_causes} value={draft.root_cause_code} onChange={(value) => setDraft({ ...draft, root_cause_code: value })} />
                   <CodeSelect label="SDLC phase introduced" items={taxonomy.sdlc_phases} value={draft.sdlc_phase_code} onChange={(value) => setDraft({ ...draft, sdlc_phase_code: value })} />
-                  <CodeSelect label="Testing gap" items={taxonomy.testing_gaps} value={draft.testing_gap_code} onChange={(value) => setDraft({ ...draft, testing_gap_code: value })} />
                 </div>
                 <label>
                   Note (optional)
@@ -599,7 +618,7 @@ export function Analysis({
                 <div className="review-buttons">
                   <button
                     className="primary"
-                    disabled={busy || !draft.root_cause_code || !draft.sdlc_phase_code || !draft.testing_gap_code}
+                    disabled={busy || !draft.root_cause_code || !draft.sdlc_phase_code}
                     onClick={() => void submitReview("CORRECT")}
                     type="button"
                   >
@@ -717,7 +736,6 @@ function SimilarCases({ rca }: { rca: RcaView }) {
               </div>
               <p className="case-meta">
                 {item.root_cause?.label ?? "—"}
-                {item.testing_gap ? ` · ${item.testing_gap.label}` : ""}
                 {item.source === "SEED_IMPORT" ? " · seed import" : ""}
               </p>
               {item.summary && <p className="case-summary">{item.summary}</p>}

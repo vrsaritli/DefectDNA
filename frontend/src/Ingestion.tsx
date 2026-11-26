@@ -141,7 +141,7 @@ export function Ingestion({ projectId, csrfToken }: { projectId: string; csrfTok
               <input accept=".csv,.xlsx" onChange={(event) => setFile(event.target.files?.[0] ?? null)} type="file" />
             </label>
             <p className="field-help">
-              Optional columns: “SDLC Phase (RCA)” and “Testing Gap”. A plain “SDLC Phase” column is ignored: in ADO
+              Optional column: “SDLC Phase (RCA)”. A plain “SDLC Phase” column is ignored: in ADO
               exports it records where a defect was found, not where it was introduced.
             </p>
           </>

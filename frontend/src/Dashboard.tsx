@@ -44,7 +44,6 @@ const GROUP_OPTIONS = [
   { value: "module", label: "Module" },
   { value: "release", label: "Release" },
   { value: "month", label: "Month" },
-  { value: "testing_gap", label: "Testing gap" },
   { value: "sdlc_phase", label: "SDLC phase" },
 ];
 
@@ -376,7 +375,7 @@ export function Dashboard({ projectId, canRebuild, csrfToken }: { projectId: str
           </div>
 
           <div className="chart-grid three">
-            <div className="card">
+            <div className="card span-2">
               <div className="card-head">
                 <div>
                   <h2>Root cause mix</h2>
@@ -388,19 +387,6 @@ export function Dashboard({ projectId, canRebuild, csrfToken }: { projectId: str
                 label={labelOf}
                 total={summary?.total ?? 0}
                 colorFor={colorOf}
-              />
-            </div>
-            <div className="card">
-              <div className="card-head">
-                <div>
-                  <h2>Testing gaps</h2>
-                  <p className="muted">Why testing missed them</p>
-                </div>
-              </div>
-              <RankedBars
-                items={summary?.by_testing_gap ?? []}
-                label={(code) => summary?.labels.testing_gap[code] ?? code}
-                total={summary?.total ?? 0}
               />
             </div>
             <div className="card">

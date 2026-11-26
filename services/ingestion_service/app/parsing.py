@@ -25,6 +25,7 @@ _CANONICAL_FIELDS = {
     "created_date",
     "closed_date",
     "tags",
+    "ado_root_cause",
 }
 _ALIASES = {
     "ado_id": {"id", "ado id", "work item id", "workitem id", "defect id"},
@@ -40,6 +41,17 @@ _ALIASES = {
     "created_date": {"created date", "created"},
     "closed_date": {"closed date", "resolved date", "closed"},
     "tags": {"tags", "tag"},
+    # The root cause QA recorded in ADO; shown beside the AI proposal, never sent to the AI.
+    "ado_root_cause": {
+        "root cause (rca)",
+        "rca root cause",
+        "root cause",
+        "confirmed root cause",
+        "ct_root cause",
+        "root_cause",
+        "root_cause_raw",
+        "rca",
+    },
 }
 _DATE_FORMATS = (
     "%m/%d/%Y",

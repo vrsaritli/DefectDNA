@@ -74,3 +74,13 @@ def test_invalid_xlsx_is_reported_as_validation_error() -> None:
         parse_defect_file("defects.xlsx", b"not an xlsx archive")
     assert error.value.status_code == 422
     assert error.value.detail["code"] == "INVALID_XLSX"
+
+
+def test_ado_root_cause_column_is_captured() -> None:
+    result = parse_defect_file(
+        "defects.csv", b"ID,Title,Root Cause (RCA)\n311,Card numbers in logs,Code\n312,Other,\n"
+    )
+
+    assert result["mapped"]["Root Cause (RCA)"] == "ado_root_cause"
+    assert result["defects"][0]["ado_root_cause"] == "Code"
+    assert not result["defects"][1].get("ado_root_cause")

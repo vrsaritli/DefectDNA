@@ -19,6 +19,7 @@ from services.api_gateway.app.auth.dependencies import (
     CurrentUserDependency,
     DatabaseDependency,
 )
+from services.api_gateway.app.rca_api import _with_ado_root_causes, ado_root_causes
 from services.api_gateway.app.taxonomy import (
     enrich_rca,
     get_current_taxonomy,
@@ -48,7 +49,8 @@ TRENDS_NOTE = "Counts include approved and corrected RCAs only."
 class FinalCodes(BaseModel):
     root_cause_code: str = Field(min_length=1, max_length=64)
     sdlc_phase_code: str = Field(min_length=1, max_length=64)
-    testing_gap_code: str = Field(min_length=1, max_length=64)
+    # Optional: the review screen no longer asks for a testing gap.
+    testing_gap_code: str | None = Field(default=None, min_length=1, max_length=64)
     # Accepted for compatibility with POSTMAN_PHASE5.md "correction" bodies.
     rationale: str | None = Field(default=None, max_length=2_000, exclude=True)
 
@@ -130,7 +132,10 @@ async def review_rca(
         if body.final is None:
             raise HTTPException(status_code=422, detail={"code": "FINAL_REQUIRED"})
         for name, kind in _CODE_FIELDS.items():
-            if getattr(body.final, name) not in taxonomy.codes(kind):
+            value = getattr(body.final, name)
+            if value is None and name == "testing_gap_code":
+                continue
+            if value not in taxonomy.codes(kind):
                 raise HTTPException(
                     status_code=422,
                     detail={"code": "UNKNOWN_TAXONOMY_CODE", "message": f"Unknown {name}"},
@@ -167,6 +172,7 @@ async def review_rca(
     )
     _, refreshed = await core._call_ai_knowledge("GET", f"/internal/rcas/{rca_id}")
     view = await enrich_rca(database, project_id, refreshed["rca"])
+    await _with_ado_root_causes(project_id, [view])
     view["trend_job_id"] = result.get("trend_job_id")
     view["knowledge_entry_id"] = result.get("knowledge_entry_id")
     view["knowledge_status"] = result.get("knowledge_status")
@@ -194,7 +200,9 @@ async def _reopen(
         detail={"defect_id": result.get("defect_id"), "previous_status": result.get("previous_status")},
     )
     _, refreshed = await core._call_ai_knowledge("GET", f"/internal/rcas/{rca_id}")
-    return await enrich_rca(database, project_id, refreshed["rca"])
+    view = await enrich_rca(database, project_id, refreshed["rca"])
+    await _with_ado_root_causes(project_id, [view])
+    return view
 
 
 @router.post("/rcas/{rca_id}/reopen")
@@ -391,11 +399,14 @@ async def _export_rows(
         )
         header = [
             "rca_id", "defect_id", "title", "module", "release", "status",
-            "ai_root_cause", "ai_sdlc_phase", "ai_testing_gap", "ai_confidence",
-            "ai_rationale", "final_root_cause", "final_sdlc_phase", "final_testing_gap",
+            "ai_root_cause", "ado_root_cause", "ai_sdlc_phase", "ai_confidence",
+            "ai_rationale", "ai_evidence", "final_root_cause", "final_sdlc_phase",
             "review_note", "failure_reason", "taxonomy_version", "model", "prompt_version",
             "analyzed_at", "reviewed_at",
         ]
+        ado = await ado_root_causes(
+            project_id, [r["defect_id"] for r in rcas if isinstance(r.get("defect_id"), int)]
+        )
         rows = []
         for rca in rcas:
             proposed = rca.get("proposed") or {}
@@ -407,12 +418,12 @@ async def _export_rows(
                     rca.get("id"), rca.get("defect_id"), snapshot.get("title"),
                     snapshot.get("module"), snapshot.get("release"), rca.get("status"),
                     _label(taxonomy, "root_causes", proposed.get("root_cause_code")),
+                    ado.get(str(rca.get("defect_id"))),
                     _label(taxonomy, "sdlc_phases", proposed.get("sdlc_phase_code")),
-                    _label(taxonomy, "testing_gaps", proposed.get("testing_gap_code")),
                     proposed.get("confidence"), proposed.get("rationale"),
+                    ", ".join(proposed.get("evidence_fields") or []),
                     _label(taxonomy, "root_causes", final.get("root_cause_code")),
                     _label(taxonomy, "sdlc_phases", final.get("sdlc_phase_code")),
-                    _label(taxonomy, "testing_gaps", final.get("testing_gap_code")),
                     final.get("note"), rca.get("failure_reason"), rca.get("taxonomy_version"),
                     model.get("llm"), model.get("prompt_version"), rca.get("analyzed_at"),
                     rca.get("reviewed_at"),

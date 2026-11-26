@@ -20,7 +20,7 @@ from services.ai_knowledge_service.app.adapters.llm import (
     LLMProviderError,
 )
 from services.ai_knowledge_service.app.pipeline.validate import RcaProposal, validate_batch
-from services.ai_knowledge_service.app.prompts.rca_v2 import (
+from services.ai_knowledge_service.app.prompts.rca_v3 import (
     CHARS_PER_TOKEN,
     MAX_RATIONALE_CHARS,
     PROMPT_VERSION,

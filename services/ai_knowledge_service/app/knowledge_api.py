@@ -59,7 +59,7 @@ _CODE_FIELDS: dict[str, TaxonomyKind] = {
 class FinalClassification(BaseModel):
     root_cause_code: str = Field(min_length=1, max_length=64)
     sdlc_phase_code: str = Field(min_length=1, max_length=64)
-    testing_gap_code: str = Field(min_length=1, max_length=64)
+    testing_gap_code: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class DefectText(BaseModel):
@@ -189,6 +189,8 @@ async def review_rca(
             raise HTTPException(status_code=422, detail={"code": "FINAL_REQUIRED"})
         final_codes = body.final.model_dump()
         for name, kind in _CODE_FIELDS.items():
+            if final_codes[name] is None and name == "testing_gap_code":
+                continue
             if final_codes[name] not in body.taxonomy.codes(kind):
                 raise HTTPException(status_code=422, detail={"code": "UNKNOWN_TAXONOMY_CODE"})
     status = "APPROVED" if proposed and final_codes == proposed_codes else "CORRECTED"

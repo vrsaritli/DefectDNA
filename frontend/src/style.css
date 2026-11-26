@@ -1072,6 +1072,24 @@ tbody tr:last-child td {
   background: var(--primary-soft);
 }
 
+.evidence-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: var(--fs-sm, 13px);
+}
+
+.evidence-chip {
+  border: 1px solid #c4ddd3;
+  border-radius: 999px;
+  padding: 1px 10px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-weight: 600;
+}
+
 .conn-pill.ok {
   border-color: var(--success-line);
   color: var(--success);

@@ -96,3 +96,15 @@ def test_batch_with_invalid_json_fails_every_ref() -> None:
     result = validate_batch("not json", TAXONOMY, ["ADO-1", "ADO-2"], max_rationale_chars=600)
     assert result.proposals == {}
     assert result.errors == {"ADO-1": "INVALID_JSON", "ADO-2": "INVALID_JSON"}
+
+
+def test_evidence_fields_are_kept_deduplicated_and_limited_to_known_sections() -> None:
+    proposal = validate_item(
+        _item(evidence_fields=["comments", "tags", "comments", "made_up"]),
+        TAXONOMY,
+        max_rationale_chars=600,
+    )
+    assert proposal.evidence_fields == ["comments", "tags"]
+    assert validate_item(_item(), TAXONOMY, max_rationale_chars=600).evidence_fields == []
+    with pytest.raises(ProposalValidationError, match="INVALID_EVIDENCE_FIELDS"):
+        validate_item(_item(evidence_fields="comments"), TAXONOMY, max_rationale_chars=600)

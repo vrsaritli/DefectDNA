@@ -1,10 +1,11 @@
-"""Prompt template ``rca-v2``: batch RCA classification grounded in confirmed cases (RAG).
+"""Prompt template ``rca-v3``: batch RCA classification grounded in confirmed cases (RAG).
 
-Like rca-v1, several defects share one request. New in v2: each record may carry
+Like rca-v1, several defects share one request. Since v2 each record may carry
 ``similar_confirmed_cases`` retrieved from the project's knowledge base, and every
 result lists the case refs it relied on (``cited_cases``); citations are validated to be
-a subset of what was retrieved for that record. Changing anything that alters model
-behaviour requires a new PROMPT_VERSION and a golden-set run (NFR-06).
+a subset of what was retrieved for that record. New in v3: every result lists the record
+sections its root cause rests on (``evidence_fields``), shown to reviewers. Changing
+anything that alters model behaviour requires a new PROMPT_VERSION and a golden-set run (NFR-06).
 """
 
 import json
@@ -13,7 +14,7 @@ from typing import Any
 from libs.common.taxonomy import OTHER_CODE, TAXONOMY_KINDS, Taxonomy
 from services.ai_knowledge_service.app.pipeline.scrub import merge_counts, scrub_text
 
-PROMPT_VERSION = "rca-v2"
+PROMPT_VERSION = "rca-v3"
 _CASE_TITLE_MAX = 120
 _CASE_SUMMARY_MAX = 160
 SCHEMA_NAME = "defect_rca_batch"
@@ -27,6 +28,19 @@ _FIELD_SHARE = {"description": 0.4, "repro_steps": 0.3, "comments": 0.3}
 _SHORT_FIELDS = ("title", "module", "release", "severity", "priority")
 _SHORT_FIELD_MAX = 300
 _DELIMITER = "defect_record"
+# Record sections the model may name as evidence; "similar_cases" = similar_confirmed_cases.
+EVIDENCE_FIELDS = (
+    "title",
+    "description",
+    "repro_steps",
+    "comments",
+    "tags",
+    "module",
+    "release",
+    "severity",
+    "priority",
+    "similar_cases",
+)
 
 _HEADINGS = {
     "root_causes": "ROOT CAUSES (field root_cause_code: why the defect exists)",
@@ -59,6 +73,10 @@ def build_output_schema(
                 "type": "array",
                 "items": {"type": "string", "enum": case_refs(max_cases)},
             },
+            "evidence_fields": {
+                "type": "array",
+                "items": {"type": "string", "enum": list(EVIDENCE_FIELDS)},
+            },
             "root_cause_code": {"type": "string", "enum": taxonomy.codes("root_causes")},
             "sdlc_phase_code": {"type": "string", "enum": taxonomy.codes("sdlc_phases")},
             "testing_gap_code": {"type": "string", "enum": taxonomy.codes("testing_gaps")},
@@ -69,6 +87,7 @@ def build_output_schema(
         "required": [
             "ref",
             "cited_cases",
+            "evidence_fields",
             "root_cause_code",
             "sdlc_phase_code",
             "testing_gap_code",
@@ -214,7 +233,11 @@ def build_system_prompt(taxonomy: Taxonomy) -> str:
         "Use them as evidence only when they genuinely describe the same kind of failure; "
         "the record's own evidence wins when they disagree. Put the refs (C1, C2, ...) of "
         "the cases you relied on in cited_cases, using only refs present in that same "
-        "record; use an empty list when you relied on none or none were given.\n\n"
+        "record; use an empty list when you relied on none or none were given.\n"
+        "8. evidence_fields: the record sections the root cause is based on, most "
+        "important first, chosen from: " + ", ".join(EVIDENCE_FIELDS) + ". Use "
+        "similar_cases when cited cases shaped the answer. Name only sections that are "
+        "non-empty in that record and that you actually relied on.\n\n"
         f"{_taxonomy_block(taxonomy)}"
     )
 

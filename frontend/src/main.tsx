@@ -25,7 +25,7 @@ import { Analysis } from "./Analysis";
 import { ConfirmedNotice } from "./ConfirmedNotice";
 import { Dashboard } from "./Dashboard";
 import { Ingestion } from "./Ingestion";
-import { api, type Coded, RCA_STATUS_LABELS, type RcaStatus, type RcaView } from "./api";
+import { api, type Coded, evidenceText, RCA_STATUS_LABELS, type RcaStatus, type RcaView } from "./api";
 
 type Screen = "dashboard" | "import" | "defects" | "analysis" | "ingestion" | "admin";
 const SCREENS: Record<Screen, { label: string; title: string; description: string; icon: LucideIcon }> = {
@@ -81,6 +81,7 @@ type Defect = {
   description: string;
   repro_steps: string;
   tags: string[];
+  ado_root_cause?: string | null;
   rca?: RcaSummary | null;
 };
 type RcaSummary = {
@@ -295,7 +296,7 @@ function App() {
             <p>Consistent RCA for every closed Azure DevOps defect, confirmed by your QA Leads.</p>
             <ul className="signin-points">
               <li>
-                <Sparkles size={18} /> Root cause, SDLC phase and testing gap in minutes
+                <Sparkles size={18} /> Root cause and SDLC phase in minutes
               </li>
               <li>
                 <Workflow size={18} /> Grounded in your own confirmed history
@@ -618,9 +619,9 @@ function App() {
                         <th>Title</th>
                         <th>Module</th>
                         <th>State</th>
-                        <th>Root cause</th>
+                        <th title="The AI proposal, or the reviewed RCA once approved or corrected">AI root cause</th>
+                        <th>ADO root cause</th>
                         <th>SDLC phase</th>
-                        <th>Testing gap</th>
                         <th>Confidence</th>
                         <th>RCA status</th>
                       </tr>
@@ -639,8 +640,8 @@ function App() {
                             <span className="state-pill">{defect.state || "Unknown"}</span>
                           </td>
                           <td>{defect.rca?.root_cause?.label ?? "—"}</td>
+                          <td>{defect.ado_root_cause || "—"}</td>
                           <td>{defect.rca?.sdlc_phase?.label ?? "—"}</td>
-                          <td>{defect.rca?.testing_gap?.label ?? "—"}</td>
                           <td className="num-cell">
                             {typeof defect.rca?.confidence === "number" ? `${Math.round(defect.rca.confidence * 100)}%` : "—"}
                           </td>
@@ -685,12 +686,12 @@ function App() {
                           {rcaStatusText(selectedDefect.rca)}
                         </span>
                         <dl>
-                          <dt>Root cause</dt>
+                          <dt>AI root cause</dt>
                           <dd>{selectedDefect.rca.root_cause?.label ?? "—"}</dd>
+                          <dt>ADO root cause</dt>
+                          <dd>{selectedDefect.ado_root_cause || "—"}</dd>
                           <dt>SDLC phase</dt>
                           <dd>{selectedDefect.rca.sdlc_phase?.label ?? "—"}</dd>
-                          <dt>Testing gap</dt>
-                          <dd>{selectedDefect.rca.testing_gap?.label ?? "—"}</dd>
                           <dt>AI confidence</dt>
                           <dd>
                             {typeof selectedDefect.rca.confidence === "number"
@@ -712,7 +713,16 @@ function App() {
                     />
                     <DetailField label="Tags" value={(selectedDefect.tags ?? []).join(", ")} />
                     {selectedRca?.proposed?.rationale && (
-                      <DetailField label="AI rationale" value={selectedRca.proposed.rationale} />
+                      <DetailField
+                        label="AI rationale"
+                        value={
+                          selectedRca.proposed.rationale +
+                          (selectedRca.proposed.evidence_fields?.length
+                            ? `
+Based on: ${evidenceText(selectedRca.proposed.evidence_fields)}`
+                            : "")
+                        }
+                      />
                     )}
                     {selectedRca && !selectedRca.proposed && (
                       <DetailField

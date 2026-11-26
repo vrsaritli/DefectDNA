@@ -44,6 +44,36 @@ async def _batch_ids(project_id: str, batch_id: str) -> tuple[list[int], str]:
     return [int(item) for item in batch.get("ado_ids", [])], str(batch.get("label") or "")
 
 
+async def ado_root_causes(project_id: str, ado_ids: list[int]) -> dict[str, str]:
+    """Root cause recorded in ADO per defect (keyed by str(ado_id)), from its import.
+
+    Best effort: returns what it could fetch if the ingestion service is unavailable.
+    """
+    ids = sorted(set(ado_ids))
+    found: dict[str, str] = {}
+    for start in range(0, len(ids), 2_000):
+        try:
+            _, result = await core._call_ingestion(
+                "POST",
+                f"/internal/projects/{project_id}/defects/ado-root-causes",
+                json_body={"ado_ids": ids[start : start + 2_000]},
+            )
+        except HTTPException:
+            break
+        found.update(result.get("root_causes") or {})
+    return found
+
+
+async def _with_ado_root_causes(project_id: str, rcas: list[dict[str, Any]]) -> None:
+    """Add each defect's current ADO root cause to the RCA views."""
+    found = await ado_root_causes(
+        project_id,
+        [rca["defect"]["ado_id"] for rca in rcas if isinstance(rca["defect"].get("ado_id"), int)],
+    )
+    for rca in rcas:
+        rca["defect"]["ado_root_cause"] = found.get(str(rca["defect"].get("ado_id"))) or None
+
+
 @router.get("/projects/{project_id}/import-batches")
 async def list_import_batches(
     project_id: str,
@@ -285,6 +315,7 @@ async def list_rcas(
     )
     cache: dict[int, Taxonomy | None] = {}
     rcas = [await enrich_rca(database, project_id, rca, cache) for rca in result.get("rcas", [])]
+    await _with_ado_root_causes(project_id, rcas)
     return {
         "page": result.get("page", page),
         "page_size": result.get("page_size", page_size),
@@ -305,4 +336,6 @@ async def get_rca(
         raise HTTPException(status_code=404, detail={"code": "RCA_NOT_FOUND"})
     project_id: str = rca["project_id"]
     await core._require_project_role(project_id, current, database, _READERS)
-    return await enrich_rca(database, project_id, rca)
+    view = await enrich_rca(database, project_id, rca)
+    await _with_ado_root_causes(project_id, [view])
+    return view

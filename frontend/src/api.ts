@@ -50,6 +50,24 @@ export const RCA_STATUS_LABELS: Record<RcaStatus, string> = {
   REJECTED: "Rejected",
 };
 
+/** Names of the defect sections an AI proposal can cite as its evidence. */
+export const EVIDENCE_LABELS: Record<string, string> = {
+  title: "Title",
+  description: "Description",
+  repro_steps: "Reproduction steps",
+  comments: "Comments",
+  tags: "Tags",
+  module: "Module",
+  release: "Release",
+  severity: "Severity",
+  priority: "Priority",
+  similar_cases: "Similar confirmed cases",
+};
+
+export function evidenceText(fields: string[]): string {
+  return fields.map((field) => EVIDENCE_LABELS[field] ?? field).join(", ");
+}
+
 export type RcaView = {
   id: string;
   status: RcaStatus;
@@ -60,8 +78,26 @@ export type RcaView = {
   retrieved_cases?: CaseView[];
   retrieval_status?: string | null;
   review_source?: "REVIEW" | "SEED_IMPORT" | null;
-  defect: { ado_id: number; title?: string; module?: string; release?: string; severity?: string; closed_month?: string | null };
-  proposed: { root_cause: Coded; sdlc_phase: Coded; testing_gap: Coded; other_proposal: string | null; confidence: number; rationale: string } | null;
+  defect: {
+    ado_id: number;
+    title?: string;
+    module?: string;
+    release?: string;
+    severity?: string;
+    closed_month?: string | null;
+    /** Root cause recorded in Azure DevOps (from the import), if any. */
+    ado_root_cause?: string | null;
+  };
+  proposed: {
+    root_cause: Coded;
+    sdlc_phase: Coded;
+    testing_gap: Coded;
+    other_proposal: string | null;
+    confidence: number;
+    rationale: string;
+    /** Defect sections the AI based the root cause on (prompt rca-v3 and later). */
+    evidence_fields?: string[];
+  } | null;
   failure_reason: string | null;
   taxonomy_version: number | null;
   model: { llm?: string; prompt_version?: string } | null;

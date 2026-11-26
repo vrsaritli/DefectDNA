@@ -154,6 +154,7 @@ async def enrich_rca(
             "other_proposal": proposed.get("other_proposal"),
             "confidence": proposed.get("confidence"),
             "rationale": proposed.get("rationale"),
+            "evidence_fields": proposed.get("evidence_fields") or [],
         }
     final = rca.get("final")
     snapshot = rca.get("defect_snapshot") or {}

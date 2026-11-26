@@ -128,7 +128,7 @@ def test_job_runs_end_to_end_without_logging_defect_text(
     proposed = next(rca for rca in listed["rcas"] if rca["defect_id"] == 101)
     assert proposed["proposed"]["root_cause_code"] == "CODE"
     assert proposed["taxonomy_version"] == 1
-    assert proposed["model"]["prompt_version"] == "rca-v2"
+    assert proposed["model"]["prompt_version"] == "rca-v3"
     assert proposed["retrieval_status"] == "DISABLED"
     assert proposed["scrub_counts"] == {"email": 1}
     assert proposed["llm_batch"]["size"] >= 1

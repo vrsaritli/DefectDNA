@@ -42,7 +42,7 @@ from services.ai_knowledge_service.app.pipeline.validate import (
     ProposalValidationError,
     validate_item,
 )
-from services.ai_knowledge_service.app.prompts.rca_v2 import (
+from services.ai_knowledge_service.app.prompts.rca_v3 import (
     MAX_RATIONALE_CHARS,
     PROMPT_VERSION,
 )
