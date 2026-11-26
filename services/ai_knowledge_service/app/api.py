@@ -40,6 +40,9 @@ class DefectForAnalysis(BaseModel):
     state: str = Field(default="", max_length=100)
     tags: list[str] = Field(default_factory=list, max_length=100)
     closed_date: datetime | None = None
+    # Used only by the duplicate rule; never sent to the LLM.
+    resolved_reason: str = Field(default="", max_length=200)
+    disposition: str = Field(default="", max_length=200)
 
 
 class AnalysisJobRequest(BaseModel):

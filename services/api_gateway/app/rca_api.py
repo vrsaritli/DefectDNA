@@ -27,7 +27,9 @@ router = APIRouter(prefix="/api/v1")
 
 _READERS = {"VIEWER", "QA_LEAD", "ADMIN"}
 _ANALYSTS = {"QA_LEAD", "ADMIN"}
-_RCA_STATUSES = {"AI_PROPOSED", "NEEDS_MANUAL_RCA", "APPROVED", "CORRECTED", "REJECTED"}
+_RCA_STATUSES = {
+    "AI_PROPOSED", "NEEDS_MANUAL_RCA", "DUPLICATE", "APPROVED", "CORRECTED", "REJECTED"
+}
 
 
 class AnalysisRequest(BaseModel):

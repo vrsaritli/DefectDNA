@@ -168,6 +168,7 @@ async def enrich_rca(
         "proposed": proposed_view,
         "final": {**(classification(final) or {}), "note": final.get("note")} if final else None,
         "failure_reason": rca.get("failure_reason"),
+        "duplicate_of": rca.get("duplicate_of"),
         "cited_cases": [_case_view(taxonomy, case) for case in rca.get("cited_cases") or []],
         "retrieved_cases": [
             _case_view(taxonomy, case) for case in rca.get("retrieved_cases") or []

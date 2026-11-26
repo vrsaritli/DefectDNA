@@ -46,6 +46,13 @@ _MONTH = r"^\d{4}-\d{2}$"
 TRENDS_NOTE = "Counts include approved and corrected RCAs only."
 
 
+def _duplicate_label(rca: dict[str, Any]) -> str | None:
+    if rca.get("status") != "DUPLICATE":
+        return None
+    original = rca.get("duplicate_of")
+    return f"N/A (duplicate of #{original})" if original else "N/A (duplicate)"
+
+
 def _caught_by_qa(taxonomy: Taxonomy, codes: dict[str, Any]) -> str | None:
     """"Could have been caught by QA?": Y - <testing gap> for Code root causes,
     otherwise N - <root cause>. Same rule as the UI."""
@@ -429,10 +436,13 @@ async def _export_rows(
                 [
                     rca.get("id"), rca.get("defect_id"), snapshot.get("title"),
                     snapshot.get("module"), snapshot.get("release"), rca.get("status"),
-                    _label(taxonomy, "root_causes", proposed.get("root_cause_code")),
+                    _duplicate_label(rca)
+                    or _label(taxonomy, "root_causes", proposed.get("root_cause_code")),
                     ado.get(str(rca.get("defect_id"))),
                     _label(taxonomy, "sdlc_phases", proposed.get("sdlc_phase_code")),
-                    _caught_by_qa(taxonomy, proposed),
+                    "N - Duplicate"
+                    if rca.get("status") == "DUPLICATE"
+                    else _caught_by_qa(taxonomy, proposed),
                     proposed.get("confidence"), proposed.get("rationale"),
                     ", ".join(proposed.get("evidence_fields") or []),
                     _label(taxonomy, "root_causes", final.get("root_cause_code")),

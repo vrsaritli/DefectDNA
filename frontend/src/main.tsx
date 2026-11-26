@@ -25,7 +25,16 @@ import { Analysis } from "./Analysis";
 import { ConfirmedNotice } from "./ConfirmedNotice";
 import { Dashboard } from "./Dashboard";
 import { Ingestion } from "./Ingestion";
-import { api, type Coded, evidenceText, qaCatchText, RCA_STATUS_LABELS, type RcaStatus, type RcaView } from "./api";
+import {
+  api,
+  type Coded,
+  evidenceText,
+  qaCatchText,
+  RCA_STATUS_LABELS,
+  type RcaStatus,
+  type RcaView,
+  rootCauseText,
+} from "./api";
 
 type Screen = "dashboard" | "import" | "defects" | "analysis" | "ingestion" | "admin";
 const SCREENS: Record<Screen, { label: string; title: string; description: string; icon: LucideIcon }> = {
@@ -91,6 +100,7 @@ type RcaSummary = {
   root_cause: Coded;
   sdlc_phase: Coded;
   testing_gap: Coded;
+  duplicate_of?: number | null;
   confidence: number | null;
 };
 
@@ -640,10 +650,10 @@ function App() {
                           <td>
                             <span className="state-pill">{defect.state || "Unknown"}</span>
                           </td>
-                          <td>{defect.rca?.root_cause?.label ?? "—"}</td>
+                          <td>{defect.rca ? rootCauseText(defect.rca.root_cause, defect.rca.status, defect.rca.duplicate_of) : "—"}</td>
                           <td>{defect.ado_root_cause || "—"}</td>
                           <td>{defect.rca?.sdlc_phase?.label ?? "—"}</td>
-                          <td>{qaCatchText(defect.rca)}</td>
+                          <td>{qaCatchText(defect.rca, defect.rca?.status)}</td>
                           <td className="num-cell">
                             {typeof defect.rca?.confidence === "number" ? `${Math.round(defect.rca.confidence * 100)}%` : "—"}
                           </td>
@@ -689,13 +699,19 @@ function App() {
                         </span>
                         <dl>
                           <dt>AI root cause</dt>
-                          <dd>{selectedDefect.rca.root_cause?.label ?? "—"}</dd>
+                          <dd>
+                            {rootCauseText(
+                              selectedDefect.rca.root_cause,
+                              selectedDefect.rca.status,
+                              selectedDefect.rca.duplicate_of,
+                            )}
+                          </dd>
                           <dt>ADO root cause</dt>
                           <dd>{selectedDefect.ado_root_cause || "—"}</dd>
                           <dt>SDLC phase</dt>
                           <dd>{selectedDefect.rca.sdlc_phase?.label ?? "—"}</dd>
                           <dt>Could have been caught by QA?</dt>
-                          <dd>{qaCatchText(selectedDefect.rca)}</dd>
+                          <dd>{qaCatchText(selectedDefect.rca, selectedDefect.rca.status)}</dd>
                           <dt>AI confidence</dt>
                           <dd>
                             {typeof selectedDefect.rca.confidence === "number"

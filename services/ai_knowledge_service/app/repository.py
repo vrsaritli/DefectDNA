@@ -14,7 +14,9 @@ REVIEWED_STATUSES = frozenset({"APPROVED", "CORRECTED"})
 # Reviewer rejected the AI proposal: not confirmed, so never in the knowledge base or trends,
 # and it may be corrected, re-opened or re-analyzed later.
 REJECTED = "REJECTED"
-RCA_STATUSES = frozenset({"AI_PROPOSED", "NEEDS_MANUAL_RCA", REJECTED, *REVIEWED_STATUSES})
+RCA_STATUSES = frozenset(
+    {"AI_PROPOSED", "NEEDS_MANUAL_RCA", "DUPLICATE", REJECTED, *REVIEWED_STATUSES}
+)
 
 
 async def ensure_aik_indexes(database: AsyncIOMotorDatabase[dict[str, Any]]) -> None:
@@ -99,6 +101,7 @@ async def save_analysis(
                 "status": outcome.status,
                 "proposed": outcome.proposal.to_dict() if outcome.proposal else None,
                 "failure_reason": outcome.failure_reason,
+                "duplicate_of": outcome.duplicate_of,
                 "final": None,
                 "cited_cases": outcome.cited_cases,
                 "retrieved_cases": outcome.retrieved_cases,

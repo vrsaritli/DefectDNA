@@ -828,6 +828,7 @@ async def _rca_summaries(
             "root_cause": chosen.get("root_cause"),
             "sdlc_phase": chosen.get("sdlc_phase"),
             "testing_gap": chosen.get("testing_gap"),
+            "duplicate_of": view.get("duplicate_of"),
             "confidence": proposed.get("confidence"),
             "reviewed_at": view.get("reviewed_at"),
         }

@@ -38,6 +38,9 @@ from services.ai_knowledge_service.app.prompts.rca_v3 import (
 Retriever = Callable[[list[dict[str, Any]]], Awaitable[Any]]
 
 AI_PROPOSED = "AI_PROPOSED"
+# Closed as a duplicate: no root cause of its own and no AI call (see pipeline/duplicate.py).
+DUPLICATE = "DUPLICATE"
+DUPLICATE_RULE_VERSION = "duplicate-rule-v1"
 NEEDS_MANUAL_RCA = "NEEDS_MANUAL_RCA"
 MAX_OUTPUT_ATTEMPTS = 2  # first try + one retry (architecture §15 step 6)
 _RECORD_JSON_OVERHEAD_CHARS = 160
@@ -89,7 +92,7 @@ class Batch:
 
 @dataclass
 class AnalysisOutcome:
-    status: Literal["AI_PROPOSED", "NEEDS_MANUAL_RCA"]
+    status: Literal["AI_PROPOSED", "NEEDS_MANUAL_RCA", "DUPLICATE"]
     proposal: RcaProposal | None
     failure_reason: str | None
     llm_attempts: int
@@ -105,6 +108,20 @@ class AnalysisOutcome:
     embedding_model: str | None = None
     retrieved_cases: list[dict[str, Any]] = field(default_factory=list)
     cited_cases: list[dict[str, Any]] = field(default_factory=list)
+    duplicate_of: int | None = None
+
+
+def duplicate_outcome(original: int | None) -> AnalysisOutcome:
+    return AnalysisOutcome(
+        status="DUPLICATE",
+        proposal=None,
+        failure_reason=None,
+        llm_attempts=0,
+        model="rule",
+        prompt_version=DUPLICATE_RULE_VERSION,
+        retrieval_status="SKIPPED",
+        duplicate_of=original,
+    )
 
 
 @dataclass

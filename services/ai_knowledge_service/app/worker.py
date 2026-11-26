@@ -28,17 +28,20 @@ from services.ai_knowledge_service.app.adapters.embedding import (
 from services.ai_knowledge_service.app.adapters.llm import GroqLLMClient, LLMClient
 from services.ai_knowledge_service.app.analysis import (
     AI_PROPOSED,
+    DUPLICATE,
     AnalysisOutcome,
     BudgetTooSmall,
     DailyCapReached,
     TokenBudget,
     analyze_defects,
+    duplicate_outcome,
 )
 from services.ai_knowledge_service.app.knowledge import (
     REEMBED_JOB,
     build_retriever,
     reembed_entries,
 )
+from services.ai_knowledge_service.app.pipeline.duplicate import detect_duplicate
 from services.ai_knowledge_service.app.repository import (
     consume_llm_call,
     ensure_aik_indexes,
@@ -133,6 +136,8 @@ async def process_analysis_job(
                 errors.append({"item": item, "message": "ALREADY_REVIEWED"})
             elif outcome.status == AI_PROPOSED:
                 progress["proposed"] += 1
+            elif outcome.status == DUPLICATE:
+                progress["duplicates"] = progress.get("duplicates", 0) + 1
             else:
                 progress["needs_manual"] += 1
                 progress["failed"] += 1
@@ -157,7 +162,16 @@ async def process_analysis_job(
 
     defects_by_id = {int(defect["ado_id"]): defect for defect in defects}
     pending = [defect for ado_id, defect in defects_by_id.items() if ado_id not in processed]
+    # Duplicates get no AI call: their root cause belongs to the original defect.
+    duplicates: dict[int, AnalysisOutcome] = {}
+    for defect in pending:
+        is_duplicate, original = detect_duplicate(defect)
+        if is_duplicate:
+            duplicates[int(defect["ado_id"])] = duplicate_outcome(original)
+    pending = [defect for defect in pending if int(defect["ado_id"]) not in duplicates]
     try:
+        if duplicates:
+            await on_batch_done(duplicates)
         await analyze_defects(
             pending,
             taxonomy,

@@ -350,6 +350,8 @@ _ANALYSIS_FIELDS = {
     "state": 1,
     "tags": 1,
     "closed_date": 1,
+    "resolved_reason": 1,
+    "disposition": 1,
 }
 
 
@@ -600,7 +602,9 @@ async def ado_pull(
             rca_ref = await source.find_field(candidate)
             if rca_ref:
                 break
-        extra = (rca_ref,) if rca_ref else ()
+        # Resolved reason ("Duplicate", ...) feeds the duplicate rule of the analysis.
+        reason_ref = await source.find_field("Resolved Reason")
+        extra = tuple(ref for ref in (rca_ref, reason_ref) if ref)
         if body.mode == "query":
             defects = await source.fetch_saved_query(
                 query_id_from_link(body.query_link or ""),
@@ -630,9 +634,13 @@ async def ado_pull(
         await source.close()
 
     for defect in defects:
-        value = (defect.pop("_extra", {}) or {}).get(rca_ref) if rca_ref else None
+        extra_values = defect.pop("_extra", {}) or {}
+        value = extra_values.get(rca_ref) if rca_ref else None
         if value is not None and str(value).strip():
             defect["ado_root_cause"] = str(value).strip()
+        reason = extra_values.get(reason_ref) if reason_ref else None
+        if reason is not None and str(reason).strip():
+            defect["resolved_reason"] = str(reason).strip()
 
     database = _database(request)
     batch_id = await _create_batch(

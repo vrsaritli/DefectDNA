@@ -938,6 +938,12 @@ tbody tr:last-child td {
   background: var(--success-soft);
 }
 
+.rca-pill.duplicate {
+  border-color: var(--border);
+  color: var(--text-2);
+  background: var(--surface-2, #f1f3f2);
+}
+
 .rca-pill.rejected {
   border-color: var(--danger-line);
   color: var(--danger);

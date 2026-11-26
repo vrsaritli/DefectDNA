@@ -40,11 +40,12 @@ export type KnowledgeStats = {
   current_embedding_model: string;
 };
 
-export type RcaStatus = "AI_PROPOSED" | "NEEDS_MANUAL_RCA" | "APPROVED" | "CORRECTED" | "REJECTED";
+export type RcaStatus = "AI_PROPOSED" | "NEEDS_MANUAL_RCA" | "DUPLICATE" | "APPROVED" | "CORRECTED" | "REJECTED";
 
 export const RCA_STATUS_LABELS: Record<RcaStatus, string> = {
   AI_PROPOSED: "AI proposed",
   NEEDS_MANUAL_RCA: "Needs manual RCA",
+  DUPLICATE: "Duplicate",
   APPROVED: "Approved",
   CORRECTED: "Corrected",
   REJECTED: "Rejected",
@@ -71,11 +72,21 @@ export const QA_CATCHABLE_ROOT_CAUSE = "CODE";
  * "Could have been caught by QA?": "Y - <testing gap>" when the root cause is Code,
  * otherwise "N - <root cause>". Same rule as the RCA export.
  */
-export function qaCatchText(value: { root_cause?: Coded | null; testing_gap?: Coded | null } | null | undefined): string {
+export function qaCatchText(
+  value: { root_cause?: Coded | null; testing_gap?: Coded | null } | null | undefined,
+  status?: string,
+): string {
+  if (status === "DUPLICATE") return "N - Duplicate";
   const root = value?.root_cause;
   if (!root) return "—";
   if (root.code === QA_CATCHABLE_ROOT_CAUSE) return `Y - ${value?.testing_gap?.label ?? "—"}`;
   return `N - ${root.label}`;
+}
+
+/** Root cause cell: "N/A (duplicate of #608)" for duplicates, else the label. */
+export function rootCauseText(root: Coded | null | undefined, status?: string, duplicateOf?: number | null): string {
+  if (status === "DUPLICATE") return duplicateOf ? `N/A (duplicate of #${duplicateOf})` : "N/A (duplicate)";
+  return root?.label ?? "—";
 }
 
 export function evidenceText(fields: string[]): string {
@@ -118,6 +129,8 @@ export type RcaView = {
     evidence_fields?: string[];
   } | null;
   failure_reason: string | null;
+  /** Original defect when this one was closed as a duplicate (status DUPLICATE). */
+  duplicate_of?: number | null;
   taxonomy_version: number | null;
   model: { llm?: string; prompt_version?: string } | null;
   llm_attempts: number | null;

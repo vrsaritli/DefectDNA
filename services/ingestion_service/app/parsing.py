@@ -26,6 +26,8 @@ _CANONICAL_FIELDS = {
     "closed_date",
     "tags",
     "ado_root_cause",
+    "resolved_reason",
+    "disposition",
 }
 _ALIASES = {
     "ado_id": {"id", "ado id", "work item id", "workitem id", "defect id"},
@@ -52,6 +54,8 @@ _ALIASES = {
         "root_cause_raw",
         "rca",
     },
+    "resolved_reason": {"resolved reason", "resolution", "resolution reason"},
+    "disposition": {"disposition", "ct_disposition"},
 }
 _DATE_FORMATS = (
     "%m/%d/%Y",

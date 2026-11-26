@@ -9,6 +9,7 @@ import {
   type JobStatus,
   QA_CATCHABLE_ROOT_CAUSE,
   qaCatchText,
+  rootCauseText,
   type KnowledgeStats,
   RCA_STATUS_LABELS,
   type RcaView,
@@ -360,6 +361,7 @@ export function Analysis({
             <option value="">All</option>
             <option value="AI_PROPOSED">AI proposed</option>
             <option value="NEEDS_MANUAL_RCA">Needs manual RCA</option>
+            <option value="DUPLICATE">Duplicate</option>
             <option value="APPROVED">Approved</option>
             <option value="CORRECTED">Corrected</option>
             <option value="REJECTED">Rejected</option>
@@ -460,9 +462,9 @@ export function Analysis({
                 >
                   <td className="id-cell">#{rca.defect.ado_id}</td>
                   <td>{rca.defect.title || "—"}</td>
-                  <td>{rca.proposed?.root_cause?.label ?? "—"}</td>
+                  <td>{rootCauseText(rca.proposed?.root_cause, rca.status, rca.duplicate_of)}</td>
                   <td>{rca.defect.ado_root_cause || "—"}</td>
-                  <td>{qaCatchText(rca.proposed)}</td>
+                  <td>{qaCatchText(rca.proposed, rca.status)}</td>
                   <td>{rca.proposed ? `${Math.round(rca.proposed.confidence * 100)}%` : "—"}</td>
                   <td>
                     <span className={`rca-pill ${rca.status.toLowerCase()}`}>{RCA_STATUS_LABELS[rca.status]}</span>
@@ -530,7 +532,18 @@ export function Analysis({
             </div>
             <div className="review-column">
               <h3 className="column-title">AI proposal</h3>
-              {selected.proposed ? (
+              {selected.status === "DUPLICATE" ? (
+                <>
+                  <p className="notice">
+                    Closed as a duplicate
+                    {selected.duplicate_of ? ` of #${selected.duplicate_of}` : ""}, so it has no root cause of its own: the
+                    original defect carries the RCA. No AI analysis was run.
+                  </p>
+                  <Field label="AI proposed root cause" value={rootCauseText(null, selected.status, selected.duplicate_of)} />
+                  <Field label="ADO root cause" value={selected.defect.ado_root_cause ?? ""} />
+                  <Field label="Could have been caught by QA?" value={qaCatchText(null, selected.status)} />
+                </>
+              ) : selected.proposed ? (
                 <>
                   <Classification label="AI proposed root cause" value={selected.proposed.root_cause} />
                   <Field label="ADO root cause" value={selected.defect.ado_root_cause ?? ""} />
