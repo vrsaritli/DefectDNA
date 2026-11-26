@@ -7,6 +7,8 @@ import {
   type CaseView,
   EVIDENCE_LABELS,
   type JobStatus,
+  QA_CATCHABLE_ROOT_CAUSE,
+  qaCatchText,
   type KnowledgeStats,
   RCA_STATUS_LABELS,
   type RcaView,
@@ -114,12 +116,11 @@ export function Analysis({
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [correcting, setCorrecting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
-  // testing_gap_code is no longer shown; an existing value is carried over unchanged on edit.
-  const [draft, setDraft] = useState<{ root_cause_code: string; sdlc_phase_code: string; testing_gap_code: string | null }>({
-    root_cause_code: "",
-    sdlc_phase_code: "",
-    testing_gap_code: null,
-  });
+  const [draft, setDraft] = useState<{
+    root_cause_code: string;
+    sdlc_phase_code: string;
+    testing_gap_code: string | null;
+  }>({ root_cause_code: "", sdlc_phase_code: "", testing_gap_code: null });
   const [note, setNote] = useState("");
 
   const [knowledge, setKnowledge] = useState<KnowledgeStats | null>(null);
@@ -445,6 +446,7 @@ export function Analysis({
                 <th>Title</th>
                 <th>AI proposed root cause</th>
                 <th>ADO root cause</th>
+                <th>Could have been caught by QA?</th>
                 <th>Confidence</th>
                 <th>Status</th>
               </tr>
@@ -460,6 +462,7 @@ export function Analysis({
                   <td>{rca.defect.title || "—"}</td>
                   <td>{rca.proposed?.root_cause?.label ?? "—"}</td>
                   <td>{rca.defect.ado_root_cause || "—"}</td>
+                  <td>{qaCatchText(rca.proposed)}</td>
                   <td>{rca.proposed ? `${Math.round(rca.proposed.confidence * 100)}%` : "—"}</td>
                   <td>
                     <span className={`rca-pill ${rca.status.toLowerCase()}`}>{RCA_STATUS_LABELS[rca.status]}</span>
@@ -468,7 +471,7 @@ export function Analysis({
               ))}
               {rcas.length === 0 && (
                 <tr>
-                  <td className="empty-cell" colSpan={6}>
+                  <td className="empty-cell" colSpan={7}>
                     No RCAs yet. {canAnalyze ? "Import closed defects, then run an analysis." : ""}
                   </td>
                 </tr>
@@ -532,6 +535,7 @@ export function Analysis({
                   <Classification label="AI proposed root cause" value={selected.proposed.root_cause} />
                   <Field label="ADO root cause" value={selected.defect.ado_root_cause ?? ""} />
                   <Classification label="SDLC phase introduced" value={selected.proposed.sdlc_phase} />
+                  <Field label="Could have been caught by QA?" value={qaCatchText(selected.proposed)} />
                   {selected.proposed.other_proposal && (
                     <Field label="Proposed new category" value={selected.proposed.other_proposal} />
                   )}
@@ -598,6 +602,7 @@ export function Analysis({
               <div className="final-grid">
                 <Classification label="Root cause" value={selected.final.root_cause} />
                 <Classification label="SDLC phase introduced" value={selected.final.sdlc_phase} />
+                <Field label="Could have been caught by QA?" value={qaCatchText(selected.final)} />
               </div>
               {selected.final.note && <Field label="Reviewer note" value={selected.final.note} />}
             </div>
@@ -610,6 +615,9 @@ export function Analysis({
                 <div className="review-form-grid">
                   <CodeSelect label="Root cause" items={taxonomy.root_causes} value={draft.root_cause_code} onChange={(value) => setDraft({ ...draft, root_cause_code: value })} />
                   <CodeSelect label="SDLC phase introduced" items={taxonomy.sdlc_phases} value={draft.sdlc_phase_code} onChange={(value) => setDraft({ ...draft, sdlc_phase_code: value })} />
+                  {draft.root_cause_code === QA_CATCHABLE_ROOT_CAUSE && (
+                    <CodeSelect label="Testing gap (how QA missed it)" items={taxonomy.testing_gaps} value={draft.testing_gap_code ?? ""} onChange={(value) => setDraft({ ...draft, testing_gap_code: value || null })} />
+                  )}
                 </div>
                 <label>
                   Note (optional)

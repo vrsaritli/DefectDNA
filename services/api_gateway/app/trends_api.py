@@ -46,6 +46,17 @@ _MONTH = r"^\d{4}-\d{2}$"
 TRENDS_NOTE = "Counts include approved and corrected RCAs only."
 
 
+def _caught_by_qa(taxonomy: Taxonomy, codes: dict[str, Any]) -> str | None:
+    """"Could have been caught by QA?": Y - <testing gap> for Code root causes,
+    otherwise N - <root cause>. Same rule as the UI."""
+    root = codes.get("root_cause_code")
+    if not root:
+        return None
+    if root == "CODE":
+        return f"Y - {_label(taxonomy, 'testing_gaps', codes.get('testing_gap_code'))}"
+    return f"N - {_label(taxonomy, 'root_causes', root)}"
+
+
 class FinalCodes(BaseModel):
     root_cause_code: str = Field(min_length=1, max_length=64)
     sdlc_phase_code: str = Field(min_length=1, max_length=64)
@@ -399,8 +410,9 @@ async def _export_rows(
         )
         header = [
             "rca_id", "defect_id", "title", "module", "release", "status",
-            "ai_root_cause", "ado_root_cause", "ai_sdlc_phase", "ai_confidence",
-            "ai_rationale", "ai_evidence", "final_root_cause", "final_sdlc_phase",
+            "ai_root_cause", "ado_root_cause", "ai_sdlc_phase", "ai_caught_by_qa",
+            "ai_confidence", "ai_rationale", "ai_evidence", "final_root_cause",
+            "final_sdlc_phase", "final_caught_by_qa",
             "review_note", "failure_reason", "taxonomy_version", "model", "prompt_version",
             "analyzed_at", "reviewed_at",
         ]
@@ -420,10 +432,12 @@ async def _export_rows(
                     _label(taxonomy, "root_causes", proposed.get("root_cause_code")),
                     ado.get(str(rca.get("defect_id"))),
                     _label(taxonomy, "sdlc_phases", proposed.get("sdlc_phase_code")),
+                    _caught_by_qa(taxonomy, proposed),
                     proposed.get("confidence"), proposed.get("rationale"),
                     ", ".join(proposed.get("evidence_fields") or []),
                     _label(taxonomy, "root_causes", final.get("root_cause_code")),
                     _label(taxonomy, "sdlc_phases", final.get("sdlc_phase_code")),
+                    _caught_by_qa(taxonomy, final),
                     final.get("note"), rca.get("failure_reason"), rca.get("taxonomy_version"),
                     model.get("llm"), model.get("prompt_version"), rca.get("analyzed_at"),
                     rca.get("reviewed_at"),

@@ -64,6 +64,20 @@ export const EVIDENCE_LABELS: Record<string, string> = {
   similar_cases: "Similar confirmed cases",
 };
 
+/** Root cause that QA could have caught before release. */
+export const QA_CATCHABLE_ROOT_CAUSE = "CODE";
+
+/**
+ * "Could have been caught by QA?": "Y - <testing gap>" when the root cause is Code,
+ * otherwise "N - <root cause>". Same rule as the RCA export.
+ */
+export function qaCatchText(value: { root_cause?: Coded | null; testing_gap?: Coded | null } | null | undefined): string {
+  const root = value?.root_cause;
+  if (!root) return "—";
+  if (root.code === QA_CATCHABLE_ROOT_CAUSE) return `Y - ${value?.testing_gap?.label ?? "—"}`;
+  return `N - ${root.label}`;
+}
+
 export function evidenceText(fields: string[]): string {
   return fields.map((field) => EVIDENCE_LABELS[field] ?? field).join(", ");
 }
@@ -72,7 +86,12 @@ export type RcaView = {
   id: string;
   status: RcaStatus;
   version: number;
-  final?: { root_cause: Coded | null; sdlc_phase: Coded | null; testing_gap: Coded | null; note?: string | null } | null;
+  final?: {
+    root_cause: Coded | null;
+    sdlc_phase: Coded | null;
+    testing_gap: Coded | null;
+    note?: string | null;
+  } | null;
   reviewed_at?: string | null;
   cited_cases?: CaseView[];
   retrieved_cases?: CaseView[];

@@ -25,7 +25,7 @@ import { Analysis } from "./Analysis";
 import { ConfirmedNotice } from "./ConfirmedNotice";
 import { Dashboard } from "./Dashboard";
 import { Ingestion } from "./Ingestion";
-import { api, type Coded, evidenceText, RCA_STATUS_LABELS, type RcaStatus, type RcaView } from "./api";
+import { api, type Coded, evidenceText, qaCatchText, RCA_STATUS_LABELS, type RcaStatus, type RcaView } from "./api";
 
 type Screen = "dashboard" | "import" | "defects" | "analysis" | "ingestion" | "admin";
 const SCREENS: Record<Screen, { label: string; title: string; description: string; icon: LucideIcon }> = {
@@ -622,6 +622,7 @@ function App() {
                         <th title="The AI proposal, or the reviewed RCA once approved or corrected">AI root cause</th>
                         <th>ADO root cause</th>
                         <th>SDLC phase</th>
+                        <th>Could have been caught by QA?</th>
                         <th>Confidence</th>
                         <th>RCA status</th>
                       </tr>
@@ -642,6 +643,7 @@ function App() {
                           <td>{defect.rca?.root_cause?.label ?? "—"}</td>
                           <td>{defect.ado_root_cause || "—"}</td>
                           <td>{defect.rca?.sdlc_phase?.label ?? "—"}</td>
+                          <td>{qaCatchText(defect.rca)}</td>
                           <td className="num-cell">
                             {typeof defect.rca?.confidence === "number" ? `${Math.round(defect.rca.confidence * 100)}%` : "—"}
                           </td>
@@ -656,7 +658,7 @@ function App() {
                       ))}
                       {defects.length === 0 && (
                         <tr>
-                          <td className="empty-cell" colSpan={9}>
+                          <td className="empty-cell" colSpan={10}>
                             No defects yet. Import a file or pull from Azure DevOps on the Import page.
                           </td>
                         </tr>
@@ -692,6 +694,8 @@ function App() {
                           <dd>{selectedDefect.ado_root_cause || "—"}</dd>
                           <dt>SDLC phase</dt>
                           <dd>{selectedDefect.rca.sdlc_phase?.label ?? "—"}</dd>
+                          <dt>Could have been caught by QA?</dt>
+                          <dd>{qaCatchText(selectedDefect.rca)}</dd>
                           <dt>AI confidence</dt>
                           <dd>
                             {typeof selectedDefect.rca.confidence === "number"
