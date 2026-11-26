@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DefectDNA — README</title>
+<style>
+  :root {
+    --primary: #293e40;
+    --primary-2: #3d5a5c;
+    --mint: #62d84e;
+    --mint-soft: #e8f6ee;
+    --mint-line: #c4ddd3;
+    --bg: #f6f7f5;
+    --surface: #ffffff;
+    --text: #16201f;
+    --text-2: #4a5655;
+    --text-3: #6b7776;
+    --border: #e1e5e2;
+    --warn-soft: #fff6e5;
+    --warn-line: #f0d9a8;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+  body {
+    margin: 0;
+    font: 15px/1.6 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+  }
+  .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 100vh; }
+  nav.toc {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    padding: 24px 18px; background: var(--primary); color: #dfe9e7;
+  }
+  nav.toc .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+  nav.toc .logo {
+    width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center;
+    background: var(--mint); color: var(--primary); font-weight: 800;
+  }
+  nav.toc strong { color: #fff; font-size: 17px; }
+  nav.toc a {
+    display: block; padding: 6px 10px; border-radius: 6px;
+    color: #cfdcda; text-decoration: none; font-size: 14px;
+  }
+  nav.toc a:hover { background: rgba(255,255,255,.08); color: #fff; }
+  nav.toc .sub { padding-left: 22px; font-size: 13px; }
+  nav.toc .back { margin-top: 22px; border: 1px solid rgba(255,255,255,.2); text-align: center; }
+  main { padding: 36px 48px 80px; max-width: 1100px; }
+  header.hero {
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    color: #fff; border-radius: 14px; padding: 28px 32px; margin-bottom: 32px;
+  }
+  header.hero h1 { margin: 0 0 6px; font-size: 28px; }
+  header.hero p { margin: 0; color: #d7e4e1; max-width: 760px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .pill {
+    border: 1px solid rgba(255,255,255,.25); border-radius: 999px;
+    padding: 2px 12px; font-size: 13px; color: #e9f3f1;
+  }
+  section { margin-bottom: 44px; }
+  h2 {
+    font-size: 22px; margin: 0 0 6px; padding-bottom: 8px;
+    border-bottom: 2px solid var(--mint-line);
+  }
+  h3 { font-size: 16px; margin: 22px 0 8px; color: var(--primary); }
+  p.lead { color: var(--text-2); margin-top: 6px; }
+  code {
+    font: 13px/1.4 Consolas, "Cascadia Code", monospace;
+    background: #eef1ef; border-radius: 4px; padding: 1px 5px;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px;
+  }
+  /* App flow */
+  ol.flow { list-style: none; counter-reset: step; padding: 0; margin: 16px 0 0; display: grid; gap: 10px; }
+  ol.flow li {
+    counter-increment: step; position: relative;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px 14px 58px;
+  }
+  ol.flow li::before {
+    content: counter(step); position: absolute; left: 16px; top: 14px;
+    width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--primary); color: #fff; font-weight: 700; font-size: 14px;
+  }
+  ol.flow b { color: var(--primary); }
+  .who { font-size: 12px; color: var(--text-3); margin-left: 6px; }
+  /* Data flow diagram */
+  .diagram { overflow-x: auto; }
+  .diagram svg { min-width: 900px; width: 100%; height: auto; display: block; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--text-2); margin-top: 10px; }
+  .legend span::before {
+    content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+    margin-right: 6px; vertical-align: -2px; background: var(--c);
+  }
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f0f3f1; font-size: 13px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-2); }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { white-space: nowrap; }
+  /* Rules */
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 14px; }
+  .rules .card h3 { margin-top: 0; }
+  .rules ul { margin: 0; padding-left: 18px; }
+  .rules li { margin: 6px 0; }
+  .note {
+    background: var(--warn-soft); border: 1px solid var(--warn-line); border-radius: var(--radius);
+    padding: 12px 16px; margin: 14px 0; font-size: 14px;
+  }
+  .ok { background: var(--mint-soft); border-color: var(--mint-line); }
+  /* Code map */
+  .folder { margin-top: 18px; }
+  .folder > .head {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    background: var(--primary); color: #fff; border-radius: var(--radius) var(--radius) 0 0; padding: 10px 16px;
+  }
+  .folder > .head code { background: rgba(255,255,255,.15); color: #fff; font-size: 14px; }
+  .folder > .head span { color: #d0dedb; font-size: 14px; }
+  .folder dl { margin: 0; background: var(--surface); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 var(--radius) var(--radius); }
+  .folder dl > div { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  .folder dl > div:last-child { border-bottom: 0; }
+  .folder dt code { background: var(--mint-soft); color: var(--primary); font-weight: 600; }
+  .folder dd { margin: 0; color: var(--text-2); font-size: 14px; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; }
+    main { padding: 24px 18px 60px; }
+    .folder dl > div { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <div class="brand"><div class="logo">D</div><strong>DefectDNA README</strong></div>
+    <a href="#overview">Overview</a>
+    <a href="#app-flow">App flow</a>
+    <a href="#data-flow">Data flow</a>
+    <a href="#statuses">RCA statuses</a>
+    <a href="#rules">Rules</a>
+    <a class="sub" href="#rules-rca">RCA &amp; display rules</a>
+    <a class="sub" href="#rules-privacy">Privacy &amp; AI safety</a>
+    <a class="sub" href="#rules-access">Access &amp; security</a>
+    <a class="sub" href="#rules-limits">Limits</a>
+    <a href="#code-map">Code map</a>
+    <a class="sub" href="#map-root">Project root</a>
+    <a class="sub" href="#map-gateway">API gateway</a>
+    <a class="sub" href="#map-ingestion">Ingestion service</a>
+    <a class="sub" href="#map-aik">AI knowledge service</a>
+    <a class="sub" href="#map-trends">Trends service</a>
+    <a class="sub" href="#map-libs">Shared library</a>
+    <a class="sub" href="#map-frontend">Frontend</a>
+    <a class="sub" href="#map-ops">Scripts, migrations, ops, docs</a>
+    <a href="#run">Run it locally</a>
+    <a class="back" href="/">← Back to the app</a>
+  </nav>
+
+  <main>
+    <header class="hero" id="overview">
+      <h1>DefectDNA</h1>
+      <p>AI-assisted root-cause analysis (RCA) for closed Azure DevOps defects. DefectDNA imports defects,
+        proposes a root cause for each one with an LLM grounded in your team's previously confirmed RCAs,
+        lets QA Leads approve or correct it, and turns confirmed RCAs into trends that show where defects come from.</p>
+      <div class="pills">
+        <span class="pill">React + Vite frontend</span>
+        <span class="pill">4 FastAPI services</span>
+        <span class="pill">MongoDB / Atlas</span>
+        <span class="pill">Groq LLM (gpt-oss-120b)</span>
+        <span class="pill">Cohere embeddings (RAG)</span>
+      </div>
+    </header>
+
+    <section id="app-flow">
+      <h2>App flow</h2>
+      <p class="lead">What a user does, from first sign-in to the dashboard.</p>
+      <ol class="flow">
+        <li><b>Sign in &amp; pick a project.</b><span class="who">Everyone</span><br />
+          Session cookie login with lockout after repeated failures. Your role on the project (Viewer, QA Lead, Admin) decides what you can do.</li>
+        <li><b>Seed the knowledge base (optional, once).</b><span class="who">Admin</span><br />
+          On <i>Ingestion</i>, upload historical defects that already have a confirmed root cause (Excel or ADO). They become embedded knowledge entries the AI can cite.</li>
+        <li><b>Import defects.</b><span class="who">QA Lead / Admin</span><br />
+          On <i>Import</i>, upload an Excel/CSV export or pull from Azure DevOps (saved query, work item IDs, or closed-by-date). Each upload or pull becomes an import batch.</li>
+        <li><b>Analyze.</b><span class="who">QA Lead / Admin</span><br />
+          On <i>AI analysis</i>, pick an import and click <i>Analyze defects</i>. Duplicates are settled by a rule; the rest are scrubbed, matched to similar confirmed cases and sent to the LLM in batches. Progress shows live.</li>
+        <li><b>Review.</b><span class="who">QA Lead / Admin</span><br />
+          Open a row to see the defect, the AI proposed root cause, the ADO root cause, “Could have been caught by QA?”, confidence, rationale with the sections it was based on, and similar cases. Approve, correct, reject or reopen.</li>
+        <li><b>Learn.</b><span class="who">Automatic</span><br />
+          An approved or corrected RCA is embedded into the knowledge base, so future analyses can cite it, and a trend fact is written for the dashboard.</li>
+        <li><b>See trends &amp; export.</b><span class="who">Everyone</span><br />
+          The <i>Dashboard</i> shows root causes by month, module and SDLC phase from reviewed RCAs only. The defect register and CSV/Excel exports list every defect with its RCA.</li>
+      </ol>
+    </section>
+
+    <section id="data-flow">
+      <h2>Data flow</h2>
+      <p class="lead">The browser only talks to the API gateway. Services talk to each other with service tokens and each owns its own MongoDB collections.</p>
+      <div class="card diagram">
+        <svg viewBox="0 0 1000 520" role="img" aria-label="Data flow between the browser, the API gateway, the three backend services, their workers, MongoDB collections and external providers">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#4a5655" />
+            </marker>
+            <style>
+              .box { fill: #fff; stroke: #c9d2ce; stroke-width: 1.5; rx: 10; }
+              .svc { fill: #293e40; }
+              .ext { fill: #fff6e5; stroke: #f0d9a8; stroke-width: 1.5; }
+              .db { fill: #e8f6ee; stroke: #c4ddd3; stroke-width: 1.5; }
+              .t { font: 600 14px 'Segoe UI', sans-serif; fill: #16201f; }
+              .tw { font: 600 14px 'Segoe UI', sans-serif; fill: #fff; }
+              .s { font: 12px 'Segoe UI', sans-serif; fill: #4a5655; }
+              .sw { font: 12px 'Segoe UI', sans-serif; fill: #cfdcda; }
+              .ln { stroke: #4a5655; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+              .lnd { stroke: #4a5655; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; marker-end: url(#arrow); }
+              .lbl { font: 11.5px 'Segoe UI', sans-serif; fill: #4a5655; }
+            </style>
+          </defs>
+
+          <!-- Browser -->
+          <rect class="box" x="20" y="200" width="150" height="90" rx="10" />
+          <text class="t" x="95" y="235" text-anchor="middle">Browser</text>
+          <text class="s" x="95" y="255" text-anchor="middle">React app :5173</text>
+          <text class="s" x="95" y="272" text-anchor="middle">(Vite proxies /api)</text>
+
+          <!-- Gateway -->
+          <rect class="svc" x="230" y="170" width="190" height="150" rx="10" />
+          <text class="tw" x="325" y="200" text-anchor="middle">API gateway :8000</text>
+          <text class="sw" x="325" y="222" text-anchor="middle">auth · roles · CSRF · quotas</text>
+          <text class="sw" x="325" y="240" text-anchor="middle">taxonomy · review commit</text>
+          <text class="sw" x="325" y="258" text-anchor="middle">audit log · exports</text>
+          <text class="sw" x="325" y="276" text-anchor="middle">users · projects · sessions</text>
+
+          <line class="ln" x1="170" y1="245" x2="228" y2="245" />
+          <text class="lbl" x="199" y="237" text-anchor="middle">HTTPS</text>
+
+          <!-- Ingestion -->
+          <rect class="svc" x="490" y="30" width="200" height="90" rx="10" />
+          <text class="tw" x="590" y="60" text-anchor="middle">Ingestion :8001</text>
+          <text class="sw" x="590" y="80" text-anchor="middle">Excel/CSV parsing</text>
+          <text class="sw" x="590" y="98" text-anchor="middle">Azure DevOps pull</text>
+
+          <!-- AI knowledge -->
+          <rect class="svc" x="490" y="190" width="200" height="110" rx="10" />
+          <text class="tw" x="590" y="218" text-anchor="middle">AI knowledge :8002</text>
+          <text class="sw" x="590" y="238" text-anchor="middle">+ analysis worker</text>
+          <text class="sw" x="590" y="256" text-anchor="middle">duplicate rule · scrub · RAG</text>
+          <text class="sw" x="590" y="274" text-anchor="middle">LLM · validate · knowledge</text>
+
+          <!-- Trends -->
+          <rect class="svc" x="490" y="380" width="200" height="90" rx="10" />
+          <text class="tw" x="590" y="410" text-anchor="middle">Trends :8003</text>
+          <text class="sw" x="590" y="430" text-anchor="middle">+ trends worker</text>
+          <text class="sw" x="590" y="448" text-anchor="middle">aggregations for dashboard</text>
+
+          <!-- Gateway -> services -->
+          <path class="ln" d="M420,200 C455,200 455,75 488,75" />
+          <path class="ln" d="M420,245 L488,245" />
+          <path class="ln" d="M420,290 C455,290 455,425 488,425" />
+          <text class="lbl" x="452" y="128" text-anchor="middle">import</text>
+          <text class="lbl" x="454" y="238" text-anchor="middle">analyze</text>
+          <text class="lbl" x="452" y="372" text-anchor="middle">trends</text>
+
+          <!-- AI -> ingestion (defects for analysis) -->
+          <path class="lnd" d="M560,188 L560,122" />
+          <text class="lbl" x="566" y="160">defects</text>
+          <!-- AI -> trends (trend facts via job) -->
+          <path class="lnd" d="M620,302 L620,378" />
+          <text class="lbl" x="626" y="345">trend-fact jobs</text>
+
+          <!-- External providers -->
+          <rect class="ext" x="790" y="30" width="190" height="70" rx="10" />
+          <text class="t" x="885" y="58" text-anchor="middle">Azure DevOps</text>
+          <text class="s" x="885" y="78" text-anchor="middle">read-only REST (PAT)</text>
+          <rect class="ext" x="790" y="150" width="190" height="70" rx="10" />
+          <text class="t" x="885" y="178" text-anchor="middle">Groq LLM</text>
+          <text class="s" x="885" y="198" text-anchor="middle">scrubbed text only</text>
+          <rect class="ext" x="790" y="250" width="190" height="70" rx="10" />
+          <text class="t" x="885" y="278" text-anchor="middle">Cohere embeddings</text>
+          <text class="s" x="885" y="298" text-anchor="middle">knowledge vectors</text>
+
+          <path class="ln" d="M692,65 L788,65" />
+          <path class="ln" d="M692,220 C740,220 740,185 788,185" />
+          <path class="ln" d="M692,270 C740,270 740,285 788,285" />
+
+          <!-- MongoDB -->
+          <rect class="db" x="790" y="370" width="190" height="130" rx="10" />
+          <text class="t" x="885" y="396" text-anchor="middle">MongoDB</text>
+          <text class="s" x="885" y="416" text-anchor="middle">defects · import_batches</text>
+          <text class="s" x="885" y="433" text-anchor="middle">rca_analyses · jobs</text>
+          <text class="s" x="885" y="450" text-anchor="middle">knowledge_entries</text>
+          <text class="s" x="885" y="467" text-anchor="middle">trend_facts · taxonomies</text>
+          <text class="s" x="885" y="484" text-anchor="middle">users · sessions · audit_log</text>
+          <path class="ln" d="M692,440 L788,440" />
+          <path class="ln" d="M420,310 C470,500 700,505 788,480" />
+        </svg>
+        <div class="legend">
+          <span style="--c:#293e40">DefectDNA service</span>
+          <span style="--c:#fff6e5">External provider</span>
+          <span style="--c:#e8f6ee">Database</span>
+          <span style="--c:#4a5655">Solid: request · Dashed: internal data hand-off</span>
+        </div>
+      </div>
+
+      <h3>Life of one defect</h3>
+      <ol class="flow">
+        <li><b>Import</b> — Ingestion parses the row or ADO work item into a <code>defects</code> document (title, description, repro steps, comments, tags, module, release, severity, state, plus the ADO root cause, resolved reason and disposition) and records an <code>import_batches</code> entry.</li>
+        <li><b>Queue</b> — The gateway asks ingestion for the batch's closed defects and queues an <code>analyze_defects</code> job in <code>jobs</code>. The AI worker claims it with a lease and checkpoints progress, so a restart resumes where it stopped.</li>
+        <li><b>Duplicate rule</b> — If the defect is a duplicate it is stored straight away as <code>DUPLICATE</code> with <code>duplicate_of</code>; no AI call.</li>
+        <li><b>Scrub &amp; retrieve</b> — Personal and sensitive values are replaced with placeholders. With RAG on, the defect is embedded and the most similar confirmed cases are retrieved from <code>knowledge_entries</code>.</li>
+        <li><b>LLM &amp; validate</b> — Defects are packed into token-budgeted batches; the answer must match a strict JSON schema and the project taxonomy. Invalid answers get one retry, then become <code>NEEDS_MANUAL_RCA</code>. Valid ones are saved to <code>rca_analyses</code> as <code>AI_PROPOSED</code>.</li>
+        <li><b>Review</b> — Approve/correct writes the final RCA, embeds it into <code>knowledge_entries</code> and queues a trend fact; the trends worker writes it to <code>trend_facts</code>. Every decision is written to <code>audit_log</code>.</li>
+      </ol>
+    </section>
+
+    <section id="statuses">
+      <h2>RCA statuses</h2>
+      <table>
+        <thead><tr><th>Status</th><th>Meaning</th><th>In knowledge base &amp; trends?</th></tr></thead>
+        <tbody>
+          <tr><td><b>AI proposed</b></td><td>The AI produced a valid proposal waiting for review.</td><td>No</td></tr>
+          <tr><td><b>Needs manual RCA</b></td><td>The AI answer failed validation twice, or the provider failed or hit its cap. A QA Lead classifies it manually.</td><td>No</td></tr>
+          <tr><td><b>Duplicate</b></td><td>Closed as a duplicate; root cause is N/A because the original defect carries it. No AI call was made.</td><td>No</td></tr>
+          <tr><td><b>Approved</b></td><td>A QA Lead accepted the AI proposal unchanged.</td><td>Yes</td></tr>
+          <tr><td><b>Corrected</b></td><td>A QA Lead changed at least one field (or classified it manually).</td><td>Yes</td></tr>
+          <tr><td><b>Rejected</b></td><td>A QA Lead rejected the proposal; it can be corrected, reopened or re-analyzed later.</td><td>No</td></tr>
+          <tr><td><b>Confirmed (ingested)</b></td><td>Came in through the Admin knowledge seed with a root cause already confirmed in ADO.</td><td>Yes</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="rules">
+      <h2>Rules</h2>
+      <p class="lead">The behaviour the app enforces, grouped by area.</p>
+      <div class="rules">
+        <div class="card" id="rules-rca">
+          <h3>RCA &amp; display rules</h3>
+          <ul>
+            <li>The AI picks exactly one <b>root cause</b>, one <b>SDLC phase introduced</b> and one <b>testing gap</b>, only from the project's versioned taxonomy.</li>
+            <li><b>Other</b> is allowed only when nothing fits, and then the AI must suggest a new category name.</li>
+            <li><b>Could have been caught by QA?</b> — root cause <b>Code</b> → <code>Y - &lt;testing gap&gt;</code>; any other root cause → <code>N - &lt;root cause&gt;</code>; duplicate → <code>N - Duplicate</code>.</li>
+            <li><b>Duplicate</b> when Resolved Reason or Disposition says “Duplicate”, or a comment/description says “duplicate of #608”. Root cause shows <code>N/A (duplicate of #608)</code>.</li>
+            <li>The <b>ADO root cause</b> is shown next to the AI proposal for comparison and is <b>never sent to the AI</b>.</li>
+            <li>The rationale lists the sections it was <b>based on</b> (title, description, repro steps, comments, tags, similar cases…).</li>
+            <li>Cited similar cases must be among those retrieved for that defect; anything else is rejected.</li>
+            <li>Only <b>closed / resolved / done</b> defects are analyzed. Reviewed RCAs are never overwritten by re-analysis.</li>
+            <li>Only <b>approved and corrected</b> RCAs reach the knowledge base, the dashboard and the trends.</li>
+          </ul>
+        </div>
+        <div class="card" id="rules-privacy">
+          <h3>Privacy &amp; AI safety</h3>
+          <ul>
+            <li>Emails, URLs, secrets/tokens, host names, IPs and long IDs are replaced by <code>[EMAIL]</code>, <code>[URL]</code>, <code>[SECRET]</code>… before any text leaves the system.</li>
+            <li>Defect text is wrapped in <code>&lt;defect_record&gt;</code> tags and treated as untrusted data: instructions inside it are ignored.</li>
+            <li>Defect text in a job payload is dropped when the job finishes; logs never contain defect text.</li>
+            <li>Each defect is analyzed independently even when batched with others.</li>
+            <li>Any change to the prompt needs a new prompt version and a golden-set run (<code>evals/</code>).</li>
+          </ul>
+        </div>
+        <div class="card" id="rules-access">
+          <h3>Access &amp; security</h3>
+          <ul>
+            <li><b>Viewer</b>: read defects, RCAs and the dashboard. <b>QA Lead</b>: import, analyze, review. <b>Admin</b>: everything, plus knowledge seed, settings, deletion and operations.</li>
+            <li>AI analysis must be enabled per project by an Admin.</li>
+            <li>Sessions expire after 8 hours (30 minutes idle); 5 failed logins lock the account for 15 minutes.</li>
+            <li>State-changing requests need a CSRF token; internal services only accept the gateway's service token.</li>
+            <li>Every review, reopen, import and deletion is written to the audit log.</li>
+            <li>Azure DevOps access is read-only; a pasted query link is never fetched as a URL, only its query ID is used.</li>
+          </ul>
+        </div>
+        <div class="card" id="rules-limits">
+          <h3>Limits (defaults, set in <code>.env</code>)</h3>
+          <ul>
+            <li>Import file ≤ 10 MiB and ≤ 5,000 rows.</li>
+            <li>≤ 200 defects per analysis run; ≤ 50 analysis runs per project per day.</li>
+            <li>≤ 500 LLM calls and ≤ 1,000 embedding calls per project per day.</li>
+            <li>≤ 8 defects per LLM batch, ~4,500 tokens per request; one retry per failed batch.</li>
+            <li>RAG retrieves the top 5 similar cases with similarity ≥ 0.5.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="note ok"><b>Tip:</b> “Re-analyze unreviewed” re-runs the AI on an import's defects that are not yet approved or corrected — for example after a prompt change.</p>
+    </section>
+
+    <section id="code-map">
+      <h2>Code map</h2>
+      <p class="lead">Every folder and file, and why it matters. Tests live next to each service in <code>tests/</code> and are not listed one by one.</p>
+
+      <div class="folder" id="map-root">
+        <div class="head"><code>/</code><span>Project root — configuration and top-level docs</span></div>
+        <dl>
+          <div><dt><code>README.md</code></dt><dd>Setup and run instructions for developers, plus phase notes (ingestion, RAG, trends). Start here when setting up a new machine.</dd></div>
+          <div><dt><code>Architecture.md</code></dt><dd>The design document: requirements, service boundaries, data model, security and NFRs. The reference when deciding where new behaviour belongs.</dd></div>
+          <div><dt><code>POSTMAN_PHASE5.md</code></dt><dd>Example API requests for the review and knowledge endpoints. Useful for testing the API without the UI.</dd></div>
+          <div><dt><code>pyproject.toml</code></dt><dd>Python dependencies and tool settings (ruff, mypy, pytest). Defines how the backend is linted, type-checked and tested.</dd></div>
+          <div><dt><code>.env.example</code></dt><dd>Template for <code>.env</code>: MongoDB URI, API keys, limits and session settings. Copy it to <code>.env</code>; secrets never go into git.</dd></div>
+          <div><dt><code>.gitignore</code></dt><dd>Keeps the virtualenv, logs, build output and local secrets out of the repository.</dd></div>
+        </dl>
+      </div>
+
+      <div class="folder" id="map-gateway">
+        <div class="head"><code>services/api_gateway/</code><span>The only service the browser talks to (:8000)</span></div>
+        <dl>
+          <div><dt><code>app/main.py</code></dt><dd>Creates the FastAPI app, mounts all routers and middleware. Entry point for <code>uvicorn</code>.</dd></div>
+          <div><dt><code>app/api.py</code></dt><dd>Core routes (projects, defect register, imports) and the helpers that call the internal services with the service token. Most other gateway modules build on it.</dd></div>
+          <div><dt><code>app/rca_api.py</code></dt><dd>Taxonomy, project settings, starting analysis jobs and RCA list/detail views (with the ADO root cause attached). Backs the AI analysis page.</dd></div>
+          <div><dt><code>app/trends_api.py</code></dt><dd>Review commit (approve/correct/reject/reopen), dashboard trends and CSV/Excel exports. Enforces review permissions and taxonomy checks.</dd></div>
+          <div><dt><code>app/taxonomy.py</code></dt><dd>Stores versioned per-project taxonomies and shapes RCA records for the UI with labels. Keeps old RCAs readable after a taxonomy change.</dd></div>
+          <div><dt><code>app/knowledge_api.py</code></dt><dd>Routes for seeding the knowledge base, retrieval debugging, stats and re-embedding. Backs the Ingestion page.</dd></div>
+          <div><dt><code>app/ado_api.py</code></dt><dd>Azure DevOps connection settings and pull routes for the Import page. Keeps the PAT server-side.</dd></div>
+          <div><dt><code>app/admin_api.py</code></dt><dd>Project data deletion (as a job) and the Operations view with alerts. Admin-only.</dd></div>
+          <div><dt><code>app/bootstrap_admin.py</code></dt><dd>One-off command that creates the first project and Admin account on an empty database.</dd></div>
+          <div><dt><code>app/auth/</code></dt><dd>Login, password hashing, session tokens, role checks (<code>dependencies.py</code>), rate limits/quotas and the audit log writer. The security backbone of the gateway.</dd></div>
+        </dl>
+      </div>
+
+      <div class="folder" id="map-ingestion">
+        <div class="head"><code>services/ingestion_service/</code><span>Gets defects in (:8001)</span></div>
+        <dl>
+          <div><dt><code>app/main.py</code></dt><dd>FastAPI app setup for the ingestion service.</dd></div>
+          <div><dt><code>app/parsing.py</code></dt><dd>Reads Excel/CSV, maps column names (ID, Title, Area Path, Root Cause (RCA), Resolved Reason…) to defect fields and reports bad rows. Change here to support new export formats.</dd></div>
+          <div><dt><code>app/ado.py</code></dt><dd>Read-only Azure DevOps client: connection test, saved queries, work item IDs, closed-by-date and comments. Normalizes work items into defects.</dd></div>
+          <div><dt><code>app/api.py</code></dt><dd>Internal routes: upload, ADO pull, knowledge seed import, import batches, defects for analysis and ADO root-cause lookup. Owns the <code>defects</code> and <code>import_batches</code> collections.</dd></div>
+        </dl>
+      </div>
+
+      <div class="folder" id="map-aik">
+        <div class="head"><code>services/ai_knowledge_service/</code><span>AI analysis, review commit and knowledge base (:8002 + worker)</span></div>
+        <dl>
+          <div><dt><code>app/main.py</code></dt><dd>FastAPI app setup; mounts the analysis and knowledge routers.</dd></div>
+          <div><dt><code>app/api.py</code></dt><dd>Internal routes to queue analysis jobs, list RCAs and report which defects are already analyzed or reviewed.</dd></div>
+          <div><dt><code>app/worker.py</code></dt><dd>Background worker: claims <code>analyze_defects</code> jobs, applies the duplicate rule, runs the pipeline, saves results and checkpoints progress so restarts resume.</dd></div>
+          <div><dt><code>app/analysis.py</code></dt><dd>The RCA pipeline: scrub → retrieve similar cases → pack token-budgeted batches → LLM → validate → one retry. Where cost and reliability are controlled.</dd></div>
+          <div><dt><code>app/prompts/rca_v3.py</code></dt><dd>The live prompt: system rules, JSON output schema (root cause, SDLC phase, testing gap, cited cases, evidence fields) and record formatting. Versioned because it drives model behaviour.</dd></div>
+          <div><dt><code>app/prompts/rca_v1.py</code></dt><dd>The first prompt version without RAG, kept for comparison runs in the golden set.</dd></div>
+          <div><dt><code>app/pipeline/scrub.py</code></dt><dd>Removes emails, URLs, secrets, hosts, IPs and IDs before text goes to an external provider. Central to the privacy promise.</dd></div>
+          <div><dt><code>app/pipeline/validate.py</code></dt><dd>Checks every AI answer against the schema and taxonomy (codes, confidence, citations, evidence). Nothing unvalidated is stored.</dd></div>
+          <div><dt><code>app/pipeline/duplicate.py</code></dt><dd>Rule that marks duplicates (resolved reason / disposition / “duplicate of #id”) before any AI call, and finds the original defect ID.</dd></div>
+          <div><dt><code>app/knowledge.py</code></dt><dd>Builds knowledge entries from confirmed RCAs, embeds them and retrieves similar cases for RAG (Atlas vector search or in-memory fallback).</dd></div>
+          <div><dt><code>app/knowledge_api.py</code></dt><dd>Internal routes for the review commit (final RCA + knowledge entry + trend fact, all-or-nothing), reopen, seeding and re-embed.</dd></div>
+          <div><dt><code>app/repository.py</code></dt><dd>Data access for <code>rca_analyses</code> and <code>llm_usage</code>: saving results without overwriting reviews, daily call caps, trend-fact building.</dd></div>
+          <div><dt><code>app/ops.py</code></dt><dd>Read-only operational metrics (failure rates, needs-manual share, costs) for the Operations view.</dd></div>
+          <div><dt><code>app/adapters/</code></dt><dd><code>llm.py</code> (Groq chat API) and <code>embedding.py</code> (Cohere embeddings) behind small interfaces, so a provider can be swapped or faked in tests.</dd></div>
+          <div><dt><code>evals/</code></dt><dd>The golden set: <code>build_golden_set.py</code> builds labelled cases from ADO exports, <code>run_golden_set.py</code> measures accuracy per prompt version, <code>reports/</code> keeps the results.</dd></div>
+        </dl>
+      </div>
+
+      <div class="folder" id="map-trends">
+        <div class="head"><code>services/trends_service/</code><span>Dashboard numbers (:8003 + worker)</span></div>
+        <dl>
+          <div><dt><code>app/main.py</code></dt><dd>FastAPI app setup for the trends service.</dd></div>
+          <div><dt><code>app/worker.py</code></dt><dd>Turns <code>trend_fact</code> jobs from reviews into <code>trend_facts</code> documents. Decouples reviewing from dashboard updates.</dd></div>
+          <div><dt><code>app/repository.py</code></dt><dd>Stores trend facts and runs the aggregations (by month, module, release, root cause, SDLC phase) behind the dashboard.</dd></div>
+          <div><dt><code>app/api.py</code></dt><dd>Internal routes for summaries, grouped trends and rebuilds.</dd></div>
+        </dl>
+      </div>
+
+      <div class="folder" id="map-libs">
+        <div class="head"><code>libs/common/</code><span>Code shared by all services</span></div>
+        <dl>
+          <div><dt><code>config.py</code></dt><dd>All settings read from <code>.env</code> (URLs, keys, limits, caps) with validation. One place to change defaults.</dd></div>
+          <div><dt><code>database.py</code></dt><dd>Creates the MongoDB client and database handle used by every service.</dd></div>
+          <div><dt><code>queue.py</code> / <code>worker.py</code></dt><dd>MongoDB-backed job queue with leases and heartbeats, and the shared worker loop. Gives retries and resume-after-crash without a separate broker.</dd></div>
+          <div><dt><code>taxonomy.py</code></dt><dd>The taxonomy contract and the starter categories (root causes, SDLC phases, testing gaps) with definitions shown to the AI.</dd></div>
+          <div><dt><code>trends.py</code></dt><dd>The trend-fact contract between the AI service (producer) and the trends service (consumer).</dd></div>
+          <div><dt><code>service_auth.py</code></dt><dd>Service-token checks so internal APIs only accept calls from the gateway.</dd></div>
+          <div><dt><code>logging.py</code> / <code>observability.py</code></dt><dd>Structured JSON logs, correlation IDs and production safety checks shared by all services.</dd></div>
+          <div><dt><code>models.py</code></dt><dd>Shared job models (job status values and the job document shape) used by the queue and workers.</dd></div>
+          <div><dt><code>ops.py</code></dt><dd>Alert rules (e.g. needs-manual rate too high) used by the Operations view and the CLI check.</dd></div>
+        </dl>
+      </div>
+
+      <div class="folder" id="map-frontend">
+        <div class="head"><code>frontend/</code><span>React + TypeScript single-page app (Vite)</span></div>
+        <dl>
+          <div><dt><code>src/main.tsx</code></dt><dd>App shell: sign-in, sidebar, project picker, page switching, the Excel/CSV import form and the defect register.</dd></div>
+          <div><dt><code>src/Analysis.tsx</code></dt><dd>AI analysis page: run analysis per import, the RCA table, and the review panel (approve, correct, reject, reopen, similar cases).</dd></div>
+          <div><dt><code>src/AdoPanel.tsx</code></dt><dd>Azure DevOps connection test and pull form (saved query, IDs or closed-by-date) on the Import page.</dd></div>
+          <div><dt><code>src/Ingestion.tsx</code></dt><dd>Knowledge ingestion page: loads historical defects with a confirmed root cause (Excel or ADO) into the knowledge base and shows the ingestion report.</dd></div>
+          <div><dt><code>src/Dashboard.tsx</code></dt><dd>Trends dashboard: KPIs, root causes by month, module and SDLC phase charts, breakdown table and exports.</dd></div>
+          <div><dt><code>src/Admin.tsx</code></dt><dd>Operations page (Admin): alerts, analysis and review metrics, LLM/embedding usage against caps, failed jobs and sign-in failures.</dd></div>
+          <div><dt><code>src/api.ts</code></dt><dd>Typed API client, shared types and display helpers (status labels, “Could have been caught by QA?”, evidence labels).</dd></div>
+          <div><dt><code>src/ConfirmedNotice.tsx</code></dt><dd>Small notice listing defects skipped because they already have a reviewed RCA.</dd></div>
+          <div><dt><code>src/style.css</code></dt><dd>The green/mint design system and all component styles.</dd></div>
+          <div><dt><code>public/</code></dt><dd>Static files served as-is: this README page and the demo slides PDF.</dd></div>
+          <div><dt><code>e2e/</code> · <code>playwright.config.ts</code></dt><dd>Playwright end-to-end tests of the main flows against a mocked API.</dd></div>
+          <div><dt><code>vite.config.ts</code> · <code>package.json</code> · <code>tsconfig.json</code></dt><dd>Dev server (proxies <code>/api</code> to :8000), build scripts, dependencies and TypeScript settings.</dd></div>
+        </dl>
+      </div>
+
+      <div class="folder" id="map-ops">
+        <div class="head"><code>scripts/ · migrations/ · ops/ · docs/</code><span>Running, upgrading and operating the app</span></div>
+        <dl>
+          <div><dt><code>scripts/start.ps1</code> / <code>stop.ps1</code></dt><dd>Start or stop the whole stack locally (4 services, 2 workers, frontend) with logs in <code>logs/</code>.</dd></div>
+          <div><dt><code>scripts/migrate.ps1</code></dt><dd>Applies all database migrations to the database in <code>.env</code>; safe to re-run.</dd></div>
+          <div><dt><code>scripts/check.ps1</code></dt><dd>Pre-release checks: lint, types, tests, dependency audits, frontend build and E2E. Run before tagging a release.</dd></div>
+          <div><dt><code>migrations/001–006</code></dt><dd>Numbered, idempotent migrations that create indexes, the starter taxonomy and collections phase by phase.</dd></div>
+          <div><dt><code>ops/check_alerts.py</code></dt><dd>Alert check for a scheduler or monitor; exits non-zero when an alert rule fires.</dd></div>
+          <div><dt><code>ops/backup_restore_check.py</code></dt><dd>Restore drill: exports a project, restores it into a scratch database and compares, proving backups work.</dd></div>
+          <div><dt><code>docs/runbooks/</code></dt><dd>Step-by-step guides for backup/restore, deploy/rollback, failed jobs, provider outages, re-embedding, data deletion and secret rotation.</dd></div>
+          <div><dt><code>docs/security/</code> · <code>docs/release-readiness.md</code></dt><dd>OWASP API checklist and the release Definition of Done.</dd></div>
+          <div><dt><code>docs/presentations/</code></dt><dd>Source of the demo deck.</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section id="run">
+      <h2>Run it locally</h2>
+      <div class="card">
+        <ol style="margin:0; padding-left: 20px;">
+          <li>Copy <code>.env.example</code> to <code>.env</code> and fill in the MongoDB URI and API keys.</li>
+          <li>Create the virtualenv and install: <code>python -m pip install -e ".[dev]"</code>; then <code>cd frontend &amp;&amp; npm install</code>.</li>
+          <li>Apply migrations: <code>.\scripts\migrate.ps1</code>; first time only, create the Admin with <code>python -m services.api_gateway.app.bootstrap_admin</code>.</li>
+          <li>Start everything: <code>.\scripts\start.ps1</code> and open <code>http://127.0.0.1:5173</code>.</li>
+          <li>Stop everything: <code>.\scripts\stop.ps1</code>. Logs are in <code>logs\</code>.</li>
+        </ol>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

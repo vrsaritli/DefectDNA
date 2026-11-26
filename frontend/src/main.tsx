@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   BrainCircuit,
   ChevronRight,
   Database,
@@ -7,7 +8,6 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
-  Presentation,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -456,9 +456,9 @@ function App() {
           </div>
           <p className="build-tag">
             DefectDNA · v1.0 ·{" "}
-            <a href="/DefectDNA-demo-slides.pdf" rel="noopener" target="_blank" title="Open the demo slides (PDF)">
-              <Presentation aria-hidden="true" size={12} />
-              Demo slides
+            <a href="/readme.html" rel="noopener" target="_blank" title="App flow, data flow, rules and code map">
+              <BookOpen aria-hidden="true" size={12} />
+              README
             </a>
           </p>
         </div>
